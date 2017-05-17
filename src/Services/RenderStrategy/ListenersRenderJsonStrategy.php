@@ -1,10 +1,9 @@
 <?php
 namespace Module\HttpRenderer\Services\RenderStrategy;
 
+use Module\HttpFoundation\Events\Listener\ListenerDispatch;
 use Poirot\Application\aSapi;
 use Poirot\Application\Sapi\Event\EventError;
-use Poirot\Application\Sapi\Server\Http\ListenerDispatch;
-use Poirot\Application\SapiHttp;
 use Poirot\Events\Interfaces\iEvent;
 
 use Poirot\Http\Header\FactoryHttpHeader;
@@ -70,8 +69,8 @@ class ListenersRenderJsonStrategy
      *
      * priority -10
      *
-     * @param mixed    $result Result from dispatch action
-     * @param SapiHttp $sapi
+     * @param mixed $result Result from dispatch action
+     * @param aSapi $sapi
      *
      * @return array|void
      */

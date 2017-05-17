@@ -1,20 +1,17 @@
 <?php
 namespace Module\HttpRenderer\Services\RenderStrategy\DefaultStrategy;
 
+use Module\HttpFoundation\Events\Listener\ListenerDispatch;
 use Module\HttpRenderer\Services\RenderStrategy\ListenersRenderDefaultStrategy;
+use Poirot\Application\aSapi;
 use Poirot\Application\Sapi;
 
-use Poirot\Application\SapiHttp;
 use Poirot\Events\Listener\aListener;
 
 use Poirot\Http\HttpMessage\Response\Plugin\Status;
 use Poirot\Http\Interfaces\iHttpResponse;
 use Poirot\Std\Environment\EnvServerDefault;
 
-
-/**
- * @see SapiHttp::_attachToEvents
- */
 
 class ListenerError
     extends aListener
@@ -39,12 +36,12 @@ class ListenerError
 
     /**
      * @param \Exception             $exception
-     * @param SapiHttp               $sapi
+     * @param aSapi                  $sapi
      * @param Sapi\Event\EventError  $event
      *
      * @return void|array
      */
-    function __invoke($exception = null, SapiHttp $sapi = null, $event = null)
+    function __invoke($exception = null, aSapi $sapi = null, $event = null)
     {
         if (!$exception instanceof \Exception)
             ## unknown error
@@ -89,7 +86,7 @@ class ListenerError
 
         return array(
             # view result
-            Sapi\Server\Http\ListenerDispatch::RESULT_DISPATCH => array(
+            ListenerDispatch::RESULT_DISPATCH => array(
                 'exception' => new \Exception(
                     'An error occurred during execution; please try again later.'
                     , null
@@ -107,7 +104,7 @@ class ListenerError
     // ..
 
     /** @see \Application\Module::initConfig */
-    protected function _getErrorViewTemplates($exception, SapiHttp $sapi)
+    protected function _getErrorViewTemplates($exception, aSapi $sapi)
     {
         $exceptionTemplate = 'error/error';
 
@@ -128,7 +125,7 @@ class ListenerError
         return $exceptionTemplate;
     }
 
-    protected function _getDefaultLayoutTemplate(SapiHttp $sapi)
+    protected function _getDefaultLayoutTemplate(aSapi $sapi)
     {
         $templates = $sapi->config()->get(ListenersRenderDefaultStrategy::CONF_KEY);
         $templates = $templates[self::CONF_KEY];

@@ -10,7 +10,7 @@ $themesFolder = trim(str_replace(PT_DIR_WWW, '', PT_DIR_THEME_DEFAULT), '/');
 
 return [
     // Path Helper Action Options
-    PathService::CONF_KEY => [
+    PathService::CONF => [
         'paths' => [
             'www-assets' => "\$baseUrl/{$themesFolder}/www",
         ],
