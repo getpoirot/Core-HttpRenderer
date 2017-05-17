@@ -20,7 +20,7 @@ return [
         ],
     ],
 
-    ServiceViewModelResolver::CONF_KEY => [
+    ServiceViewModelResolver::CONF => [
         'Poirot\Loader\LoaderNamespaceStack' => [
             // Use Default Theme Folder To Achieve Views With Force First ("**")
             '**' => PT_DIR_THEME_DEFAULT,
