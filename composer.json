@@ -1,0 +1,21 @@
+{
+    "name": "poirot/cor-http_renderer"
+    , "description": "Core Foundation Http Renderer Strategies."
+    , "authors": [
+        {
+            "name": "Payam Naderi"
+            , "email": "naderi.payam@gmail.com"
+        }
+    ]
+    , "require": {
+        "poirot/skeleton": "dev-devel"
+    }
+    , "autoload"  : {
+        "psr-4": {
+            "Module\\HttpRenderer\\": "src/"
+        }
+        , "files": [
+            "src/_ioc-facade.php"
+        ]
+    }
+}
