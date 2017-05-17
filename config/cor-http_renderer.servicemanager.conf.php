@@ -1,10 +1,14 @@
 <?php
 
+use Module\HttpRenderer\Services\RenderStrategy\aListenerRenderStrategy;
+use Module\HttpRenderer\Services\ServiceRenderStrategy;
+
+
 return [
     'implementations' => [
-        'RenderStrategy' => \Module\HttpRenderer\Services\RenderStrategy\aListenerRenderStrategy::class,
+        'RenderStrategy' => aListenerRenderStrategy::class,
     ],
     'services' => [
-        \Module\HttpRenderer\Services\ServiceRenderStrategy::class,
+        ServiceRenderStrategy::class,
     ],
 ];

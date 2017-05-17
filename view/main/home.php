@@ -1,6 +1,4 @@
 <?php
-
-/** @var \Module\Foundation\HttpSapi\ViewModelRenderer $this */
 $_f__ = function () use (&$events) {
     if (!$events)
         ## events not exists
@@ -41,7 +39,7 @@ $_f__->__invoke();
 // put section features into theme as widget
 ## render partial section feature from view script belong to application module
 ## @see section-features.phtml
-$section_features = $this->action()->view('partial/section-features');
+$section_features = \Module\Foundation\Module::view('partial/section-features');
 
 return array(
     'section_features' => $section_features

@@ -64,7 +64,6 @@ class Module implements iSapiModule
         $nameSpaceLoader = $baseAutoloader->loader($nameSpaceLoader);
         $nameSpaceLoader->addResource(__NAMESPACE__, __DIR__);
 
-        require_once __DIR__.'/_ioc-facade.php';
     }
 
     /**
@@ -100,7 +99,7 @@ class Module implements iSapiModule
      */
     function initConfig(iDataEntity $config)
     {
-        return \Poirot\Config\load(__DIR__ . '/../../config/cor-http_renderer');
+        return \Poirot\Config\load(__DIR__ . '/../config/cor-http_renderer');
     }
 
     /**
@@ -119,7 +118,7 @@ class Module implements iSapiModule
      */
     function initServiceManager(Container $services)
     {
-        return \Poirot\Config\load(__DIR__ . '/../../config/cor-http_renderer.servicemanager');
+        return \Poirot\Config\load(__DIR__ . '/../config/cor-http_renderer.servicemanager');
     }
 
     /**
@@ -167,9 +166,9 @@ class Module implements iSapiModule
         /** @var LoaderNamespaceStack $resolver */
         $resolver = $viewModelResolver->loader(LoaderNamespaceStack::class);
         $resolver->with([
-            'main/' => __DIR__. '/../../view/main/',
-            'partial/'   => __DIR__.'/../../view/partial',
-            'error/'   => __DIR__.'/../../view/error',
+            'main/' => __DIR__. '/../view/main/',
+            'partial/'   => __DIR__.'/../view/partial',
+            'error/'   => __DIR__.'/../view/error',
         ]);
     }
 }
