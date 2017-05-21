@@ -1,7 +1,7 @@
 <section id="main-slider" class="no-margin">
     <div class="carousel slide wet-asphalt">
         <div class="carousel-inner">
-            <div class="item active" style="background-image: url(<?php echo \Module\Foundation\Module::path('www-assets') ?>/images/slider/bg1.jpg)">
+            <div class="item active" style="background-image: url(<?php echo \Module\Foundation\Actions::path('www-assets') ?>/images/slider/bg1.jpg)">
                 <div class="container">
                     <div class="row">
                         <div class="col-sm-12">
@@ -19,32 +19,3 @@
     </div>
 </section>
 
-<?php echo $section_features; ?>
-
-<?php if (isset($events)) { ?>
-<section id="testimonial" class="alizarin">
-    <div class="container">
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="center">
-                    <h2>Latest Contribution activity</h2>
-                </div>
-                <div class="gap"></div>
-                <div class="row">
-                    <?php foreach ($events as $event) { ?>
-                    <?php $cycle = \Module\Foundation\Module::cycle('<div class="col-md-4"> <!-- START -->', array(1, 3)) ?>
-                        <blockquote>
-                            <p><strong><?php echo $event->repo->name; ?>:</strong> <?php echo $event->payload->message; ?></p>
-                            <small><?php echo $event->payload->author->name ?> - <?php echo $event->created_at; ?></small>
-                        </blockquote>
-                    <?php $cycle = \Module\Foundation\Module::cycle('</div> <!-- END -->', [$cycle, 3]) ?>
-                    <?php } ?>
-                    <?php if ($cycle->getCounter() !== 3) { ?>
-                        </div> <!-- END -->
-                    <?php } ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-<?php } ?>
