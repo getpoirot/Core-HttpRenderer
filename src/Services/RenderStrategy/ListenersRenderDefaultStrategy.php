@@ -134,8 +134,8 @@ class ListenersRenderDefaultStrategy
             ## template decorator for view model
             ->on(
                 EventHeapOfSapi::EVENT_APP_RENDER
-                , function ($result = null) use ($self) {
-                    return $self->injectToLayoutDecorator($result);
+                , function ($result = null, $route_match = null) use ($self) {
+                    return $self->injectToLayoutDecorator($result, $route_match);
                 }
                 , self::PRIORITY_DECORATE_VIEWMODEL_LAYOUT
             )
@@ -191,11 +191,12 @@ class ListenersRenderDefaultStrategy
      * - bind current viewModel To Decorator
      * - replace decorator as new result
      *
-     * @param mixed    $result Result from dispatch action
+     * @param mixed $result Result from dispatch action
+     * @param RouterStack $route_match
      *
      * @return array|void
      */
-    protected function injectToLayoutDecorator($result = null)
+    protected function injectToLayoutDecorator($result = null, $route_match = null)
     {
         $viewModel = $result;
         if (!$viewModel instanceof iViewModel)
@@ -206,14 +207,17 @@ class ListenersRenderDefaultStrategy
             return;
 
 
+
         // ...
+        $routeParams   = $route_match->params();
+        $routeTemplate = $routeParams->get('layout_template');
 
         $viewAsTemplate = $this->viewModelOfLayouts();
 
         ## default layout if template view has no template
         $layout  = ($viewAsTemplate->getTemplate())
             ? $viewAsTemplate->getTemplate()
-            : $this->getDefaultLayout();
+            : ($routeTemplate) ? $routeTemplate : $this->getDefaultLayout();
 
         $viewAsTemplate->setTemplate($layout);
         ## bind current result view model as child
