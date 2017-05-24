@@ -209,15 +209,18 @@ class ListenersRenderDefaultStrategy
 
 
         // ...
-        $routeParams   = $route_match->params();
-        $routeTemplate = $routeParams->get('layout_template');
+        if ($route_match) {
+            $routeParams   = $route_match->params();
+            $routeTemplate = $routeParams->get('layout_template');
+        }
 
         $viewAsTemplate = $this->viewModelOfLayouts();
 
         ## default layout if template view has no template
         $layout  = ($viewAsTemplate->getTemplate())
             ? $viewAsTemplate->getTemplate()
-            : ($routeTemplate) ? $routeTemplate : $this->getDefaultLayout();
+            : ( (isset($routeTemplate)) ? $routeTemplate : $this->getDefaultLayout() )
+        ;
 
         $viewAsTemplate->setTemplate($layout);
         ## bind current result view model as child
