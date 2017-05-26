@@ -11,6 +11,7 @@ use Poirot\Router\RouterStack;
 
 use Poirot\Std\Interfaces\Struct\iDataEntity;
 
+use Poirot\View\DecorateViewModelFeatures;
 use Poirot\View\Interfaces\iViewModel;
 use Poirot\View\Interfaces\iViewModelPermutation;
 use Poirot\View\ViewModelStatic;
@@ -199,35 +200,35 @@ class ListenersRenderDefaultStrategy
     protected function injectToLayoutDecorator($result = null, $route_match = null)
     {
         $viewModel = $result;
-        if (!$viewModel instanceof iViewModel)
+        if (! $viewModel instanceof iViewModel )
             return;
 
-        if ($viewModel->isFinal())
-            ## no layout decorator
+        if ( $viewModel->isFinal() )
+            ## no layout decorator; in case of action return viewModel instance directly.
             return;
 
 
 
         // ...
-        if ($route_match) {
-            $routeParams   = $route_match->params();
-            $routeTemplate = $routeParams->get('layout_template');
-        }
 
         $viewAsTemplate = $this->viewModelOfLayouts();
 
         ## default layout if template view has no template
         $layout  = ($viewAsTemplate->getTemplate())
             ? $viewAsTemplate->getTemplate()
-            : ( (isset($routeTemplate)) ? $routeTemplate : $this->getDefaultLayout() )
+            : $this->getDefaultLayout()
         ;
 
         $viewAsTemplate->setTemplate($layout);
         ## bind current result view model as child
-        $viewAsTemplate->bind($viewModel, function($resultRender, $parent) {
-            /** @var $parent iViewModelPermutation */
-            $parent->variables()->set('content', $resultRender);
-        });
+        $viewAsTemplate->bind( new DecorateViewModelFeatures(
+            $viewModel
+            , function(){}
+            , function($resultRender, $parent) {
+                /** @var $parent iViewModelPermutation */
+                $parent->variables()->set('content', (string) $resultRender);
+            }
+        ));
 
         return array('result' => $viewAsTemplate);
     }
