@@ -1,29 +1,18 @@
 <?php
-use Module\Foundation\ServiceManager\ServiceViewModelResolver;
-use Module\Foundation\Services\PathService;
 use Module\HttpRenderer\Services\RenderStrategy\DefaultStrategy\ListenerError;
 use Module\HttpRenderer\Services\RenderStrategy\ListenersRenderDefaultStrategy;
 
-// TODO Themes Folder Define Within Module as Setting
-// TODO by this considered that themes always exists within www that seems ok when not using asset-manager
-$themesFolder = trim(str_replace(PT_DIR_WWW, '', PT_DIR_THEME_DEFAULT), '/');
-
 return [
-    // Path Helper Action Options
-    PathService::CONF => [
+    \Module\Foundation\Services\PathService::CONF => [
         'paths' => [
-            'www-assets' => "\$baseUrl/{$themesFolder}/www",
+            // According to route name 'www-assets' to serve statics files
+            // @see cor-http_foundation.routes
+            'www-theme' => "\$baseUrl/p/theme/",
         ],
         'variables' => [
-            // force base url value; but still detect from within path service
-            # 'baseUrl' => ($baseurl = getenv('PT_BASEURL')) ? $baseurl : null,
-        ],
-    ],
-
-    ServiceViewModelResolver::CONF => [
-        'Poirot\Loader\LoaderNamespaceStack' => [
-            // Use Default Theme Folder To Achieve Views With Force First ("**")
-            '**' => PT_DIR_THEME_DEFAULT,
+            'serverUrl' => function() { return \Module\HttpFoundation\getServerUrl(); },
+            'basePath'  => function() { return \Module\HttpFoundation\getBasePath(); },
+            'baseUrl'   => function() { return \Module\HttpFoundation\getBaseUrl(); },
         ],
     ],
 

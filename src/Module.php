@@ -16,6 +16,8 @@ use Poirot\Loader\Interfaces\iLoaderAutoload;
 use Poirot\Loader\LoaderAggregate;
 use Poirot\Loader\LoaderNamespaceStack;
 
+use Poirot\Router\BuildRouterStack;
+use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Std\Interfaces\Struct\iDataEntity;
 
 
@@ -154,21 +156,45 @@ class Module implements iSapiModule
      *
      * ! after all modules loaded
      *
-     * @param LoaderAggregate                $viewModelResolver
+     * @param LoaderAggregate  $viewModelResolver
      *
      * @internal param null $services service names must have default value
      */
-    function resolveRegisteredServices( $viewModelResolver = null)
+    function resolveRegisteredServices($viewModelResolver = null, $router = null)
     {
+        # Register Routes:
+        $this->_setupHttpRouter($router);
+
         # Attach Module Scripts To View Resolver:
 
         // But We May Need Template Rendering Even In API Calls
         /** @var LoaderNamespaceStack $resolver */
         $resolver = $viewModelResolver->loader(LoaderNamespaceStack::class);
         $resolver->with([
-            'main/' => __DIR__. '/../view/main/',
-            'partial/'   => __DIR__.'/../view/partial',
+            // Use Default Theme Folder To Achieve Views With Force First ("**")
+            '**'       => __DIR__.'/../theme',
+            'main/'    => __DIR__. '/../view/main/',
+            'partial/' => __DIR__.'/../view/partial',
             'error/'   => __DIR__.'/../view/error',
         ]);
+    }
+
+
+    // ..
+
+    /**
+     * Setup Http Stack Router
+     *
+     * @param iRouterStack $router
+     *
+     * @return void
+     */
+    protected function _setupHttpRouter(iRouterStack $router)
+    {
+        $routes = include __DIR__ . '/../config/cor-http_renderer.routes.conf.php';
+        $buildRoute = new BuildRouterStack();
+        $buildRoute->setRoutes($routes);
+
+        $buildRoute->build($router);
     }
 }

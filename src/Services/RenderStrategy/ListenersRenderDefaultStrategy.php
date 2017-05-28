@@ -18,11 +18,6 @@ use Poirot\View\ViewModelStatic;
 use Poirot\View\ViewModelTemplate;
 
 
-/**
- * // TODO Template on matched route as params; each route match can define render layout
- *
- * @see doAttachDefaultEvents::_attachDefaultEvents*
- */
 class ListenersRenderDefaultStrategy
     extends aListenerRenderStrategy
 {
