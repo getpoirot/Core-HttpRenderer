@@ -11,7 +11,7 @@ use Poirot\Router\RouterStack;
 
 use Poirot\Std\Interfaces\Struct\iDataEntity;
 
-use Poirot\View\DecorateViewModelFeatures;
+use Poirot\View\DecorateViewModel;
 use Poirot\View\Interfaces\iViewModel;
 use Poirot\View\Interfaces\iViewModelPermutation;
 use Poirot\View\ViewModelStatic;
@@ -206,6 +206,7 @@ class ListenersRenderDefaultStrategy
 
         // ...
 
+        /** @var DecorateViewModel $viewAsTemplate */
         $viewAsTemplate = $this->viewModelOfLayouts();
 
         ## default layout if template view has no template
@@ -216,9 +217,9 @@ class ListenersRenderDefaultStrategy
 
         $viewAsTemplate->setTemplate($layout);
         ## bind current result view model as child
-        $viewAsTemplate->bind( new DecorateViewModelFeatures(
+        $viewAsTemplate->bind( new DecorateViewModel(
             $viewModel
-            , function(){}
+            , null
             , function($resultRender, $parent) {
                 /** @var $parent iViewModelPermutation */
                 $parent->variables()->set('content', (string) $resultRender);
@@ -243,12 +244,12 @@ class ListenersRenderDefaultStrategy
      * ## if template name not include separator, like (about)
      * ## prefixed with route match name
      *
-     * @param ViewModelTemplate $result      Result from dispatch action
-     * @param iRouterStack      $route_match
+     * @param iViewModel   $result      Result from dispatch action
+     * @param iRouterStack $route_match
      *
      * @return ViewModelTemplate
      */
-    protected function _preScriptViewModelTemplate(ViewModelTemplate $result = null, $route_match = null)
+    protected function _preScriptViewModelTemplate(iViewModel $result = null, $route_match = null)
     {
         $viewScriptModel = clone $result;
 
