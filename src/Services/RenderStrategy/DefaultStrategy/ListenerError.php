@@ -6,33 +6,30 @@ use Module\HttpRenderer\Services\RenderStrategy\ListenersRenderDefaultStrategy;
 use Poirot\Application\aSapi;
 use Poirot\Application\Sapi;
 
-use Poirot\Events\Listener\aListener;
-
 use Poirot\Http\HttpMessage\Response\Plugin\Status;
 use Poirot\Http\Interfaces\iHttpResponse;
 use Poirot\Std\Environment\EnvServerDefault;
+use Poirot\Std\Struct\CollectionPriority;
 
 
 class ListenerError
-    extends aListener
 {
-    const CONF_KEY = 'error_templates';
-
     /** @var ListenersRenderDefaultStrategy */
     protected $viewRendererStrategy;
 
 
     /**
      * ListenerError constructor.
-     * 
+     *
      * @param ListenersRenderDefaultStrategy $defaultStrategy
+     * @param CollectionPriority             $themeQueue
      */
-    function __construct(ListenersRenderDefaultStrategy $defaultStrategy)
+    function __construct(ListenersRenderDefaultStrategy $defaultStrategy, &$themeQueue)
     {
         $this->viewRendererStrategy = $defaultStrategy;
-
-        parent::__construct(null); // has no options
+        $this->themeQueue = &$themeQueue;
     }
+
 
     /**
      * @param \Exception             $exception
@@ -43,29 +40,39 @@ class ListenerError
      */
     function __invoke($exception = null, aSapi $sapi = null, $event = null)
     {
-        if (!$exception instanceof \Exception)
+        if (! $exception instanceof \Exception )
             ## unknown error
             return;
+
 
         $viewRenderStrategy = $this->viewRendererStrategy;
 
         # View Script Model Template
+        #
         $scriptViewModel = $viewRenderStrategy->viewModelOfScripts();
-        $errorTemplate   = $this->_getErrorViewTemplates($exception, $sapi);
+        if ( null === $errorTemplate   = $this->_attainViewScriptTemplateOfError($exception) )
+            throw new \Exception(sprintf(
+                'Cant find error template while exception (%s) catch.'
+                , get_class($exception)
+            ));
+
         $scriptViewModel->setTemplate((is_array($errorTemplate)) ? $errorTemplate[0] : $errorTemplate);
 
+
         # Error Layout Template
+        #
         $layoutViewModel = $viewRenderStrategy->viewModelOfLayouts();
-        $layoutTemplate  = (is_array($errorTemplate)) ? $errorTemplate[1] : $this->_getDefaultLayoutTemplate($sapi);
+        $layoutTemplate  = (is_array($errorTemplate)) ? $errorTemplate[1] : $this->_attainLayoutTemplate();
         if ($layoutTemplate)
             $layoutViewModel->setTemplate($layoutTemplate);
         else
             ## just render view script and disable layout template
             $scriptViewModel->setFinal();
 
+
         // ...
 
-        $isAllowDisplayExceptions = new EnvServerDefault();
+        $isAllowDisplayExceptions = new EnvServerDefault;
         $isAllowDisplayExceptions = $isAllowDisplayExceptions->getErrorReporting();
 
 
@@ -84,52 +91,69 @@ class ListenerError
         }
 
 
-        return array(
+        return [
             # view result
-            ListenerDispatch::RESULT_DISPATCH => array(
+            ListenerDispatch::RESULT_DISPATCH => [
                 'exception' => new \Exception(
                     'An error occurred during execution; please try again later.'
                     , null
                     , $exception
                 ),
                 'display_exceptions' => $isAllowDisplayExceptions
-            ),
+            ],
 
             # disable default throw exception listener at the end
             'exception' => null, // Grab Exception and not pass to other handlers
-        );
+        ];
     }
 
 
     // ..
 
     /** @see \Application\Module::initConfig */
-    protected function _getErrorViewTemplates($exception, aSapi $sapi)
+    protected function _attainViewScriptTemplateOfError($exception)
     {
-        $exceptionTemplate = 'error/error';
+        $exceptionTemplate = null;
 
-        $templates = $sapi->config()->get(ListenersRenderDefaultStrategy::CONF_KEY);
-        if (is_array($templates) && isset($templates[self::CONF_KEY])) {
-            $templates = $templates[self::CONF_KEY];
-            $exClass = get_class($exception);
-            while($exClass) {
-                if (isset($templates[$exClass])) {
-                    $exceptionTemplate = $templates[$exClass];
-                    break;
+        foreach (clone $this->themeQueue as $theme)
+        {
+            $templates = @$theme->layout['exception'];
+            if ( is_array($templates) ) {
+                $exClass = get_class($exception);
+                while($exClass) {
+                    if (isset($templates[$exClass])) {
+                        $exceptionTemplate = $templates[$exClass];
+                        break;
+                    }
+
+                    $exClass = get_parent_class($exClass);
                 }
-
-                $exClass = get_parent_class($exClass);
             }
+
+            if ( isset($exceptionTemplate) )
+                break;
         }
 
         return $exceptionTemplate;
     }
 
-    protected function _getDefaultLayoutTemplate(aSapi $sapi)
+    protected function _attainLayoutTemplate()
     {
-        $templates = $sapi->config()->get(ListenersRenderDefaultStrategy::CONF_KEY);
-        $templates = $templates[self::CONF_KEY];
+        $exceptionTemplate = null;
 
-        return $templates['Exception'][1];
+        foreach (clone $this->themeQueue as $theme)
+        {
+            $templates = @$theme->layout['exception'];
+            if ( is_array($templates) ) {
+                if (isset($templates['Exception']) && isset($templates['Exception'][1])) {
+                    #! here (blank) is defined as default layout for all error pages
+                    #- 'Exception' => ['error/error', 'blank'],
+                    $exceptionTemplate = $templates['Exception'][1];
+                    break;
+                }
+            }
+        }
+
+        return $exceptionTemplate;
     }
 }

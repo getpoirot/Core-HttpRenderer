@@ -166,13 +166,10 @@ class Module implements iSapiModule
         $this->_setupHttpRouter($router);
 
         # Attach Module Scripts To View Resolver:
-
-        // But We May Need Template Rendering Even In API Calls
+        #
         /** @var LoaderNamespaceStack $resolver */
         $resolver = $viewModelResolver->loader(LoaderNamespaceStack::class);
         $resolver->with([
-            // Use Default Theme Folder To Achieve Views With Force First ("**")
-            '**'       => __DIR__.'/../theme',
             'main/'    => __DIR__. '/../view/main/',
             'partial/' => __DIR__.'/../view/partial',
             'error/'   => __DIR__.'/../view/error',

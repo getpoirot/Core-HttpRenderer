@@ -2,15 +2,20 @@
 namespace Module\HttpRenderer\Services\RenderStrategy;
 
 use Module\HttpRenderer\Services\RenderStrategy\DefaultStrategy\ListenerError;
+use Module\HttpRenderer\Services\RenderStrategy\DefaultStrategy\ListenerThemes;
+use Poirot\Application\aSapi;
 use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 
 use Poirot\Events\Interfaces\iEvent;
 
+use Poirot\Loader\LoaderNamespaceStack;
 use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Router\RouterStack;
 
-use Poirot\Std\Interfaces\Struct\iDataEntity;
+use Poirot\Std\Exceptions\exImmutable;
 
+use Poirot\Std\Struct\CollectionPriority;
+use Poirot\Std\Struct\DataEntity;
 use Poirot\View\DecorateViewModel;
 use Poirot\View\Interfaces\iViewModel;
 use Poirot\View\Interfaces\iViewModelPermutation;
@@ -28,12 +33,15 @@ class ListenersRenderDefaultStrategy
     const PRIORITY_DECORATE_VIEWMODEL_LAYOUT  = -900;
     const PRIORITY_FINALIZE                   = -1000;
 
-    protected $defaultLayout = 'default';
+    protected $themesQueue;
 
     /** @var iViewModelPermutation View script model */
     protected $scriptView;
     /** @var iViewModelPermutation */
     protected $templateView;
+
+    protected $defaultLayout = 'default';
+
 
 
     // Implement Setter/Getter
@@ -60,17 +68,6 @@ class ListenersRenderDefaultStrategy
      */
     function getDefaultLayout()
     {
-        if (!$this->defaultLayout) {
-            $sapi = $this->sc->get('sapi');
-            /** @var iDataEntity $config */
-            $config = $sapi->config();
-            if ($config = $config->get(self::CONF_KEY)) {
-                if (is_array($config) && isset($config['default_layout']))
-                    $this->setDefaultLayout($config['default_layout']);
-
-            }
-        }
-
         return $this->defaultLayout;
     }
 
@@ -103,6 +100,20 @@ class ListenersRenderDefaultStrategy
         return $this->templateView;
     }
 
+    /**
+     * Give Matched Themes Queue
+     *
+     * @param CollectionPriority $themes
+     */
+    function giveThemes(CollectionPriority $themes)
+    {
+        if ($this->themesQueue)
+            throw new exImmutable;
+
+        $this->themesQueue = $themes;
+
+        $this->_ensureThemes();
+    }
 
     // ...
 
@@ -119,6 +130,13 @@ class ListenersRenderDefaultStrategy
     {
         $self = $this;
         $events
+            ## give themes and initialize
+            ->on(
+                EventHeapOfSapi::EVENT_APP_DISPATCH
+                , new ListenerThemes($this, $this->_getConf('themes'))
+                , 1000
+            )
+
             ## create view model from string result
             ->on(
                 EventHeapOfSapi::EVENT_APP_RENDER
@@ -135,11 +153,19 @@ class ListenersRenderDefaultStrategy
                 }
                 , self::PRIORITY_DECORATE_VIEWMODEL_LAYOUT
             )
+            ## ensure themes viewResolver
+            ->on(
+                EventHeapOfSapi::EVENT_APP_RENDER
+                , function () use ($self) {
+                    $self->_ensureThemes();
+                }
+                , self::PRIORITY_DECORATE_VIEWMODEL_LAYOUT+1
+            )
 
             ## handle error pages
             ->on(
                 EventHeapOfSapi::EVENT_APP_ERROR
-                , new ListenerError($this)
+                , new ListenerError($this, $this->themesQueue)
                 , self::APP_ERROR_HANDLE_RENDERER_PRIORITY
             )
         ;
@@ -206,27 +232,48 @@ class ListenersRenderDefaultStrategy
 
         // ...
 
-        /** @var DecorateViewModel $viewAsTemplate */
-        $viewAsTemplate = $this->viewModelOfLayouts();
+        $viewAsTemplate = $viewModel;
 
-        ## default layout if template view has no template
-        $layout  = ($viewAsTemplate->getTemplate())
-            ? $viewAsTemplate->getTemplate()
-            : $this->getDefaultLayout()
-        ;
+        foreach (clone $this->themesQueue as $theme)
+        {
+            /** @var DecorateViewModel $viewAsTemplate */
+            $viewAsTemplate = $this->viewModelOfLayouts();
 
-        $viewAsTemplate->setTemplate($layout);
-        ## bind current result view model as child
-        $viewAsTemplate->bind( new DecorateViewModel(
-            $viewModel
-            , null
-            , function($resultRender, $parent) {
+            ## default layout if template view has no template
+            $layout = ( $viewAsTemplate->getTemplate() )
+                ? $viewAsTemplate->getTemplate()
+                : $theme->layout['default']
+            ;
+
+            $viewAsTemplate->setTemplate($layout);
+            ##  bind current result view model as child delegate
+            ##- with parent when render while put result in $content
+            $viewAsTemplate->bind( new DecorateViewModel(
+                $viewModel
+                , null
+                , function($resultRender, $parent) {
                 /** @var $parent iViewModelPermutation */
                 $parent->variables()->set('content', (string) $resultRender);
             }
-        ));
+            ));
 
-        return array('result' => $viewAsTemplate);
+            if ( $viewAsTemplate->isFinal() )
+                break;
+        }
+
+
+        return ['result' => $viewAsTemplate];
+    }
+
+    /**
+     * Get Content Type That Renderer Will Provide
+     * exp. application/json; text/html
+     *
+     * @return string
+     */
+    function getContentType()
+    {
+        return 'text/html; charset=UTF-8';
     }
 
 
@@ -249,12 +296,12 @@ class ListenersRenderDefaultStrategy
      *
      * @return ViewModelTemplate
      */
-    protected function _preScriptViewModelTemplate(iViewModel $result = null, $route_match = null)
+    private function _preScriptViewModelTemplate(iViewModel $result = null, $route_match = null)
     {
         $viewScriptModel = clone $result;
 
         // Achieve Template Name From Matched Route:
-        if (!$route_match)
+        if (! $route_match )
             ## using default view script template
             return $result;
 
@@ -264,21 +311,57 @@ class ListenersRenderDefaultStrategy
             ## if template name not include separator, like (about)
             ## prefixed with route match name
             $template = substr($routeName, 0, strrpos($routeName, RouterStack::SEPARATOR)).RouterStack::SEPARATOR.$template;
-        elseif (!$template)
+        elseif (! $template )
             $template = $routeName;
 
         $viewScriptModel->setTemplate($template);
         return $viewScriptModel;
     }
 
-    /**
-     * Get Content Type That Renderer Will Provide
-     * exp. application/json; text/html
-     *
-     * @return string
-     */
-    function getContentType()
+    protected function _ensureThemes()
     {
-        return 'text/html; charset=UTF-8';
+        $viewModelResolver = $this->sc->get('/viewModelResolver');
+
+        foreach (clone $this->themesQueue as $theme) {
+            ## ViewScripts To View Resolver:
+            /** @var LoaderNamespaceStack $resolver */
+            $resolver = $viewModelResolver->loader( LoaderNamespaceStack::class );
+            $resolver->with(array(
+                '**' => [$theme->dir],
+            ));
+        }
+    }
+
+
+    /**
+     * Get Config Values
+     *
+     * Argument can passed and map to config if exists [$key][$_][$__] ..
+     *
+     * @param $key
+     * @param null $_
+     *
+     * @return mixed|null
+     * @throws \Exception
+     */
+    protected function _getConf($key = null, $_ = null)
+    {
+        // retrieve and cache config
+        $services = $this->sc;
+
+        /** @var aSapi $config */
+        $config = $services->get('/sapi');
+        $orig = $config  = $config->config();
+        /** @var DataEntity $config */
+        $config = $config->get( self::CONF_KEY, [] );
+
+        foreach (func_get_args() as $key) {
+            if (! isset($config[$key]) )
+                return null;
+
+            $config = $config[$key];
+        }
+
+        return $config;
     }
 }
