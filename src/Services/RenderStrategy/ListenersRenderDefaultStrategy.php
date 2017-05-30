@@ -8,6 +8,7 @@ use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 
 use Poirot\Events\Interfaces\iEvent;
 
+use Poirot\Ioc\instance;
 use Poirot\Loader\LoaderNamespaceStack;
 use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Router\RouterStack;
@@ -41,7 +42,7 @@ class ListenersRenderDefaultStrategy
     protected $templateView;
 
     protected $defaultLayout = 'default';
-
+    protected $themes_loaded = [];
 
 
     // Implement Setter/Getter
@@ -103,16 +104,14 @@ class ListenersRenderDefaultStrategy
     /**
      * Give Matched Themes Queue
      *
-     * @param CollectionPriority $themes
+     * @return CollectionPriority
      */
-    function giveThemes(CollectionPriority $themes)
+    protected function themesQueue()
     {
-        if ($this->themesQueue)
-            throw new exImmutable;
+        if (! $this->themesQueue )
+            $this->themesQueue = new CollectionPriority;
 
-        $this->themesQueue = $themes;
-
-        $this->_ensureThemes();
+        return $this->themesQueue;
     }
 
     // ...
@@ -132,8 +131,20 @@ class ListenersRenderDefaultStrategy
         $events
             ## give themes and initialize
             ->on(
+                EventHeapOfSapi::EVENT_APP_BOOTSTRAP
+                , function () use ($self) {
+                    $self->giveThemes(false);
+                    $self->_ensureThemes();
+                }
+                , 1000
+            )
+            ## give themes and initialize
+            ->on(
                 EventHeapOfSapi::EVENT_APP_DISPATCH
-                , new ListenerThemes($this, $this->_getConf('themes'))
+                , function () use ($self) {
+                    $self->giveThemes(true);
+                    $self->_ensureThemes();
+                }
                 , 1000
             )
 
@@ -172,6 +183,55 @@ class ListenersRenderDefaultStrategy
 
         return $this;
     }
+
+    /**
+     * Give Theme To Queue From Conf.
+     *
+     * ! if not invokeWhen then just give default themes on bootstrap
+     *
+     * @param boolean $invokeWhen
+     */
+    protected function giveThemes($invokeWhen)
+    {
+        $queue = $this->themesQueue();
+
+        foreach ($this->_getConf('themes') as $name => $settings)
+        {
+            if ( in_array($name, $this->themes_loaded) )
+                continue;
+
+            $when = $settings['when'];
+            if ( $invokeWhen && is_callable($when) ) {
+                $callable = \Poirot\Ioc\newInitIns( new instance($when) );
+                $when = (boolean) call_user_func($callable);
+            }
+
+            if ($when) {
+                $queue->insert(
+                    (object) [ 'name' => $name, 'dir' => $settings['dir'], 'layout' => $settings['layout'] ]
+                    , $settings['priority']
+                );
+
+                $this->themes_loaded[] = $name;
+            }
+
+        }
+    }
+
+    protected function _ensureThemes()
+    {
+        $viewModelResolver = $this->sc->get('/viewModelResolver');
+
+        foreach (clone $this->themesQueue as $theme) {
+            ## ViewScripts To View Resolver:
+            /** @var LoaderNamespaceStack $resolver */
+            $resolver = $viewModelResolver->loader( LoaderNamespaceStack::class );
+            $resolver->with([
+                '**' => [ $theme->dir ],
+            ]);
+        }
+    }
+
 
     /**
      * Create ViewModel From Actions Result
@@ -316,20 +376,6 @@ class ListenersRenderDefaultStrategy
 
         $viewScriptModel->setTemplate($template);
         return $viewScriptModel;
-    }
-
-    protected function _ensureThemes()
-    {
-        $viewModelResolver = $this->sc->get('/viewModelResolver');
-
-        foreach (clone $this->themesQueue as $theme) {
-            ## ViewScripts To View Resolver:
-            /** @var LoaderNamespaceStack $resolver */
-            $resolver = $viewModelResolver->loader( LoaderNamespaceStack::class );
-            $resolver->with(array(
-                '**' => [$theme->dir],
-            ));
-        }
     }
 
 
