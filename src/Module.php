@@ -1,6 +1,7 @@
 <?php
 namespace Module\HttpRenderer;
 
+use Module\HttpRenderer\Services\ServiceRenderStrategy;
 use Poirot\Application\Interfaces\iApplication;
 use Poirot\Application\Interfaces\Sapi\iSapiModule;
 use Poirot\Application\aSapi;
@@ -21,6 +22,23 @@ use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Std\Interfaces\Struct\iDataEntity;
 
 
+/**
+ * - Provide Render Strategies To Represent Dispatch Result.
+ *   include html and json render strategy,
+ *   html render strategy has become with extensible template engine mechanism.
+ *
+ *   include default bootstrap theme.
+ *
+ *   @see ServiceRenderStrategy
+ *
+ *
+ * - With defined route name "www-theme" as fileServe all static file
+ *   from within theme/www are accessible.
+ *
+ *   also define a static path "www-theme" point to this url.
+ *
+ *   @see cor-http_renderer.routes.conf.php
+ */
 class Module implements iSapiModule
     , Sapi\Module\Feature\iFeatureModuleInitSapi
     , Sapi\Module\Feature\iFeatureModuleAutoload

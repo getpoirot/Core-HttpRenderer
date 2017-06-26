@@ -8,11 +8,6 @@ return [
             // @see cor-http_foundation.routes
             'www-theme' => "\$baseUrl/p/theme/",
         ],
-        'variables' => [
-            'serverUrl' => function() { return \Module\HttpFoundation\getServerUrl(); },
-            'basePath'  => function() { return \Module\HttpFoundation\getBasePath(); },
-            'baseUrl'   => function() { return \Module\HttpFoundation\getBaseUrl(); },
-        ],
     ],
 
     // View Renderer Options

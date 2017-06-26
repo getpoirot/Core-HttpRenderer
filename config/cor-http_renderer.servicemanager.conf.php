@@ -9,6 +9,6 @@ return [
         'RenderStrategy' => aListenerRenderStrategy::class,
     ],
     'services' => [
-        ServiceRenderStrategy::class,
+        'RenderStrategy' => ServiceRenderStrategy::class,
     ],
 ];
