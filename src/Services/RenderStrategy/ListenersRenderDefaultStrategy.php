@@ -13,8 +13,6 @@ use Poirot\Loader\LoaderNamespaceStack;
 use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Router\RouterStack;
 
-use Poirot\Std\Exceptions\exImmutable;
-
 use Poirot\Std\Struct\CollectionPriority;
 use Poirot\Std\Struct\DataEntity;
 use Poirot\View\DecorateViewModel;
@@ -134,7 +132,7 @@ class ListenersRenderDefaultStrategy
                 EventHeapOfSapi::EVENT_APP_BOOTSTRAP
                 , function () use ($self) {
                     $self->giveThemes(false);
-                    $self->_ensureThemes();
+//                    $self->_ensureThemes();
                 }
                 , 1000
             )
@@ -197,8 +195,8 @@ class ListenersRenderDefaultStrategy
 
         foreach ($this->_getConf('themes') as $name => $settings)
         {
-            if ( in_array($name, $this->themes_loaded) )
-                continue;
+            /*if ( in_array($name, $this->themes_loaded) )
+                continue;*/
 
             $when = $settings['when'];
             if ( $invokeWhen && is_callable($when) ) {
