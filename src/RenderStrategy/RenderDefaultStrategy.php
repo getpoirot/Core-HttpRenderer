@@ -1,13 +1,13 @@
 <?php
-namespace Module\HttpRenderer\Services\RenderStrategy;
+namespace Module\HttpRenderer\RenderStrategy;
 
-use Module\HttpRenderer\Services\RenderStrategy\DefaultStrategy\ListenerError;
-use Module\HttpRenderer\Services\RenderStrategy\DefaultStrategy\ListenerThemes;
+use Module\HttpRenderer\RenderStrategy\DefaultStrategy\ListenerError;
 use Poirot\Application\aSapi;
 use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 
 use Poirot\Events\Interfaces\iEvent;
 
+use Poirot\Http\Interfaces\iHttpResponse;
 use Poirot\Ioc\instance;
 use Poirot\Loader\LoaderNamespaceStack;
 use Poirot\Router\Interfaces\iRouterStack;
@@ -22,8 +22,8 @@ use Poirot\View\ViewModelStatic;
 use Poirot\View\ViewModelTemplate;
 
 
-class ListenersRenderDefaultStrategy
-    extends aListenerRenderStrategy
+class RenderDefaultStrategy
+    extends aRenderStrategy
 {
     const CONF_KEY = 'view_renderer';
 
@@ -78,7 +78,7 @@ class ListenersRenderDefaultStrategy
     function viewModelOfScripts()
     {
         if (! $this->scriptView )
-            $this->scriptView = $this->sc->fresh('ViewModel');
+            $this->scriptView = $this->sc->fresh('/ViewModel');
 
         return $this->scriptView;
     }
@@ -91,7 +91,7 @@ class ListenersRenderDefaultStrategy
     function viewModelOfLayouts()
     {
         if (! $this->templateView ) {
-            $viewAsTemplate = $this->sc->fresh('ViewModel');
+            $viewAsTemplate = $this->sc->fresh('/ViewModel');
             $viewAsTemplate->setFinal();
             $this->templateView = $viewAsTemplate;
         }
@@ -242,6 +242,11 @@ class ListenersRenderDefaultStrategy
      */
     protected function createScriptViewModelFromResult($result = null, $route_match = null)
     {
+        if ($result instanceof iHttpResponse)
+            // Response Prepared; So Do Nothing.
+            return;
+
+
         if (\Poirot\Std\isStringify($result)) {
             ## null, string, objects with __toString
             $viewModel = new ViewModelStatic();

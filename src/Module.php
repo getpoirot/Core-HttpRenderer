@@ -1,7 +1,8 @@
 <?php
 namespace Module\HttpRenderer;
 
-use Module\HttpRenderer\Services\ServiceRenderStrategy;
+use Module\HttpRenderer\RenderStrategy\aRenderStrategy;
+use Module\HttpRenderer\Services\RenderStrategies\PluginsOfRenderStrategy;
 use Poirot\Application\Interfaces\iApplication;
 use Poirot\Application\Interfaces\Sapi\iSapiModule;
 use Poirot\Application\aSapi;
@@ -11,6 +12,7 @@ use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 
 use Poirot\Ioc\Container;
 
+use Poirot\Ioc\Container\BuildContainer;
 use Poirot\Loader\Autoloader\LoaderAutoloadAggregate;
 use Poirot\Loader\Autoloader\LoaderAutoloadNamespace;
 use Poirot\Loader\Interfaces\iLoaderAutoload;
@@ -43,11 +45,14 @@ class Module implements iSapiModule
     , Sapi\Module\Feature\iFeatureModuleInitSapi
     , Sapi\Module\Feature\iFeatureModuleAutoload
     , Sapi\Module\Feature\iFeatureModuleMergeConfig
-    , Sapi\Module\Feature\iFeatureModuleInitServices
     , Sapi\Module\Feature\iFeatureModuleInitModuleManager
+    , Sapi\Module\Feature\iFeatureModuleNestServices
     , Sapi\Module\Feature\iFeatureModuleInitSapiEvents
     , Sapi\Module\Feature\iFeatureOnPostLoadModulesGrabServices
 {
+    const CONF = 'module.http-renderer';
+
+
     /**
      * Init Module Against Application
      *
@@ -123,22 +128,24 @@ class Module implements iSapiModule
     }
 
     /**
-     * Build Service Container
+     * Get Nested Module Services
      *
-     * priority: 1000 X
+     * it can be used to manipulate other registered services by modules
+     * with passed Container instance as argument.
      *
-     * - register services
-     * - define aliases
-     * - add initializers
-     * - ...
+     * priority not that serious
      *
-     * @param Container $services
+     * @param Container $moduleContainer
      *
-     * @return array|\Traversable|void Container Builder Config
+     * @return null|array|BuildContainer|\Traversable
      */
-    function initServiceManager(Container $services)
+    function getServices(Container $moduleContainer = null)
     {
-        return \Poirot\Config\load(__DIR__ . '/../config/cor-http_renderer.servicemanager');
+        $conf    = \Poirot\Config\load(__DIR__ . '/../config/cor-http_renderer.services');
+
+        $builder = new BuildContainer;
+        $builder->with($builder::parseWith($conf));
+        return $builder;
     }
 
     /**
@@ -161,8 +168,14 @@ class Module implements iSapiModule
         $sapi     = $events->collector()->getSapi();
         $services = $sapi->services();
 
-        $renderStrategy = $services->get('RenderStrategy');
-        $renderStrategy->attachToEvent($events);
+        /** @var PluginsOfRenderStrategy $renderStrategies */
+        $renderStrategies = $services->get('/module/httpRenderer/services/RenderStrategies');
+        foreach ( $renderStrategies->listServices() as $strategyName ) {
+            // Attach Renderer To Application Events; Lets Strategies Rules ...
+            $strategy = $renderStrategies->get($strategyName);
+            /** @var aRenderStrategy $strategy */
+            $strategy->attachToEvent($events);
+        }
     }
 
     /**

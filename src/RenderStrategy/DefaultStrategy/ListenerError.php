@@ -1,8 +1,8 @@
 <?php
-namespace Module\HttpRenderer\Services\RenderStrategy\DefaultStrategy;
+namespace Module\HttpRenderer\RenderStrategy\DefaultStrategy;
 
 use Module\HttpFoundation\Events\Listener\ListenerDispatch;
-use Module\HttpRenderer\Services\RenderStrategy\ListenersRenderDefaultStrategy;
+use Module\HttpRenderer\RenderStrategy\RenderDefaultStrategy;
 use Poirot\Application\aSapi;
 use Poirot\Application\Sapi;
 
@@ -14,17 +14,17 @@ use Poirot\Std\Struct\CollectionPriority;
 
 class ListenerError
 {
-    /** @var ListenersRenderDefaultStrategy */
+    /** @var RenderDefaultStrategy */
     protected $viewRendererStrategy;
 
 
     /**
      * ListenerError constructor.
      *
-     * @param ListenersRenderDefaultStrategy $defaultStrategy
+     * @param RenderDefaultStrategy $defaultStrategy
      * @param CollectionPriority             $themeQueue
      */
-    function __construct(ListenersRenderDefaultStrategy $defaultStrategy, &$themeQueue)
+    function __construct(RenderDefaultStrategy $defaultStrategy, &$themeQueue)
     {
         $this->viewRendererStrategy = $defaultStrategy;
         $this->themeQueue = &$themeQueue;

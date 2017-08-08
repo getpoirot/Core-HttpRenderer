@@ -1,5 +1,5 @@
 <?php
-namespace Module\HttpRenderer\Services\RenderStrategy;
+namespace Module\HttpRenderer\RenderStrategy;
 
 use Module\HttpFoundation\Events\Listener\ListenerDispatch;
 use Poirot\Application\aSapi;
@@ -8,8 +8,8 @@ use Poirot\Events\Interfaces\iEvent;
 
 use Poirot\Http\Header\FactoryHttpHeader;
 use Poirot\Http\HttpMessage\Response\Plugin\Status;
-use Poirot\Http\HttpResponse;
 
+use Poirot\Http\Interfaces\iHttpRequest;
 use Poirot\Http\Interfaces\iHttpResponse;
 use Poirot\Ioc\Container;
 
@@ -23,13 +23,26 @@ use ReflectionClass;
  *
  * @see doAttachDefaultEvents::_attachDefaultEvents
  */
-class ListenersRenderJsonStrategy
-    extends aListenerRenderStrategy
+class RenderJsonStrategy
+    extends aRenderStrategy
 {
     /** @var Container */
     protected $sc;
+    protected $request;
 
-    
+    protected $canHandle = false;
+
+
+    /**
+     * aAction constructor.
+     * @param iHttpRequest $httpRequest @IoC /HttpRequest
+     */
+    function __construct(iHttpRequest $httpRequest)
+    {
+        $this->request = $httpRequest;
+    }
+
+
     // Implement Setter/Getter
     
     /**
@@ -50,7 +63,7 @@ class ListenersRenderJsonStrategy
                 , function ($result = null, $sapi = null) use ($self) {
                     return $self->createResponseFromResult($result, $sapi);
                 }
-                , -20
+                , 100
             )
             ->on(
                 EventHeapOfSapi::EVENT_APP_ERROR
@@ -76,24 +89,28 @@ class ListenersRenderJsonStrategy
      */
     protected function createResponseFromResult($result = null, $sapi = null)
     {
-        if ($result instanceof HttpResponse)
-            return;
+        if (! $this->canHandle() )
+            return null;
+
+        if ( $result instanceof iHttpResponse )
+            // Response Prepared; Do Nothing.
+            return null;
 
 
-        if (is_array($result))
+        if ( is_array($result) )
             $result = new \ArrayIterator($result);
 
-        if ($result instanceof \Traversable) {
+        if ( $result instanceof \Traversable ) {
             $result = new StdTravers($result);
             $result = $result->toArray(null, true);
         }
         
-        $result = array(
+        $result = [
             'status' => 'OK',
             'result' => $result
-        );
+        ];
 
-        $content = json_encode($result);
+        $content  = json_encode($result);
         $response = $sapi->services()->get('HttpResponse');
         $response->headers()->insert(
             FactoryHttpHeader::of(array('Content-Type' => 'application/json')) );
@@ -116,12 +133,16 @@ class ListenersRenderJsonStrategy
      */
     protected function handleErrorRender($exception = null, $event = null, $sapi = null)
     {
-        // TODO Response Aware Exception; map exception code to response code aware and more; include headers
+        if (! $this->canHandle() )
+            // Do Nothing;
+            return null;
 
-        if (!$exception instanceof \Exception)
+        if (! $exception instanceof \Exception )
             ## unknown error
             return;
 
+
+        // TODO Response Aware Exception; map exception code to response code aware and more; include headers
         $exception_code = $exception->getCode();
 
         $exRef = new ReflectionClass($exception);
@@ -188,5 +209,24 @@ class ListenersRenderJsonStrategy
     function getContentType()
     {
         return 'application/json';
+    }
+
+
+    // ..
+
+    private function canHandle()
+    {
+        if ($this->canHandle !== null)
+            return $this->canHandle;
+
+
+        if ( $this->request->headers()->has('Accept') ) {
+            $acceptHeader = $this->request->headers()->get('Accept');
+            foreach ($acceptHeader as $h) {
+                $values = $h->renderValueLine();
+                if (strtolower($values) === 'application/json')
+                    return $this->canHandle = true;
+            }
+        }
     }
 }

@@ -1,5 +1,8 @@
 <?php
-use Module\HttpRenderer\Services\RenderStrategy\ListenersRenderDefaultStrategy;
+
+use Module\HttpRenderer\RenderStrategy\RenderDefaultStrategy;
+use Module\HttpRenderer\RenderStrategy\RenderJsonStrategy;
+use Module\HttpRenderer\Services\ServiceRenderStrategiesContainer;
 
 return [
     \Module\Foundation\Services\PathService::CONF => [
@@ -10,8 +13,17 @@ return [
         ],
     ],
 
+    \Module\HttpRenderer\Module::CONF => [
+        ServiceRenderStrategiesContainer::CONF => [
+            'services' => [
+                'default' => RenderDefaultStrategy::class,
+                'json'    => RenderJsonStrategy::class
+            ],
+        ],
+    ],
+
     // View Renderer Options
-    ListenersRenderDefaultStrategy::CONF_KEY => [
+    RenderDefaultStrategy::CONF_KEY => [
         'themes' => [
             'default' => [
                 'dir' => __DIR__.'/../theme',

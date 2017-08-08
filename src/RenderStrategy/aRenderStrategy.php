@@ -1,15 +1,13 @@
 <?php
-namespace Module\HttpRenderer\Services\RenderStrategy;
+namespace Module\HttpRenderer\RenderStrategy;
 
 use Poirot\Events\Interfaces\iCorrelatedEvent;
 use Poirot\Ioc\Container;
 use Poirot\Ioc\Interfaces\iContainer;
 use Poirot\Ioc\Interfaces\Respec\iServicesAware;
-use Poirot\Std\ConfigurableSetter;
 
 
-abstract class aListenerRenderStrategy
-    extends ConfigurableSetter
+abstract class aRenderStrategy
     implements iCorrelatedEvent
     , iServicesAware
 {
