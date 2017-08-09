@@ -30,7 +30,7 @@ class RenderJsonStrategy
     protected $sc;
     protected $request;
 
-    protected $canHandle = false;
+    protected $canHandle;
 
 
     /**
