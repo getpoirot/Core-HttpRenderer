@@ -200,7 +200,7 @@ class RenderDefaultStrategy
 
             $when = $settings['when'];
             if ( $invokeWhen && is_callable($when) ) {
-                $callable = \Poirot\Ioc\newInitIns( new instance(function () use ($when) { return $when; }) );
+                $callable = \Poirot\Ioc\newInitIns( new instance($when) );
                 $when = (boolean) call_user_func($callable);
             }
 
