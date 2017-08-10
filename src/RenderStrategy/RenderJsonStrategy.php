@@ -70,7 +70,7 @@ class RenderJsonStrategy
                 , function ($exception = null, $e = null, $sapi = null) use ($self) {
                     return $self->handleErrorRender($exception, $e, $sapi);
                 }
-                , self::APP_ERROR_HANDLE_RENDERER_PRIORITY
+                , self::APP_ERROR_HANDLE_RENDERER_PRIORITY + 100
             )
         ;
         

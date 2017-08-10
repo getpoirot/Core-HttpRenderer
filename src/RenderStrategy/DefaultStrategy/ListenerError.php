@@ -101,9 +101,6 @@ class ListenerError
                 ),
                 'display_exceptions' => $isAllowDisplayExceptions
             ],
-
-            # disable default throw exception listener at the end
-            'exception' => null, // Grab Exception and not pass to other handlers
         ];
     }
 
