@@ -90,7 +90,6 @@ class ListenerError
             $response->setStatusCode(($exception_code) ? $exception_code : 500);
         }
 
-
         return [
             # view result
             ListenerDispatch::RESULT_DISPATCH => [
@@ -101,6 +100,9 @@ class ListenerError
                 ),
                 'display_exceptions' => $isAllowDisplayExceptions
             ],
+
+            // Other Listeners Don't Catch Exception anymore!
+            'exception' => null,
         ];
     }
 
