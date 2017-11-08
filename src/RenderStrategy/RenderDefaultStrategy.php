@@ -195,16 +195,25 @@ class RenderDefaultStrategy
 
         foreach ($this->_getConf('themes') as $name => $settings)
         {
-            /*if ( in_array($name, $this->themes_loaded) )
-                continue;*/
+
+            if ( in_array($name, $this->themes_loaded) )
+                continue;
+
 
             $when = $settings['when'];
             if ( $invokeWhen && is_callable($when) ) {
                 $callable = \Poirot\Ioc\newInitIns( new instance($when) );
                 $when = (boolean) call_user_func($callable);
-            }
 
-            if ($when) {
+                if ($when) {
+                    $queue->insert(
+                        (object) [ 'name' => $name, 'dir' => $settings['dir'], 'layout' => $settings['layout'] ]
+                        , $settings['priority']
+                    );
+
+                    $this->themes_loaded[] = $name;
+                }
+            } elseif (!is_callable($when) && $when) {
                 $queue->insert(
                     (object) [ 'name' => $name, 'dir' => $settings['dir'], 'layout' => $settings['layout'] ]
                     , $settings['priority']
@@ -212,7 +221,6 @@ class RenderDefaultStrategy
 
                 $this->themes_loaded[] = $name;
             }
-
         }
     }
 
