@@ -1,12 +1,14 @@
 <?php
 namespace Module\HttpRenderer\RenderStrategy;
 
+use Module\HttpFoundation\ServiceManager\ServiceRequest;
 use Module\HttpRenderer\RenderStrategy\DefaultStrategy\ListenerError;
 use Poirot\Application\aSapi;
 use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 
 use Poirot\Events\Interfaces\iEvent;
 
+use Poirot\Http\Interfaces\iHttpRequest;
 use Poirot\Http\Interfaces\iHttpResponse;
 use Poirot\Ioc\instance;
 use Poirot\Loader\LoaderNamespaceStack;
@@ -125,6 +127,16 @@ class RenderDefaultStrategy
      */
     function attachToEvent(iEvent $events)
     {
+        /** @var aSapi $sapi */
+        $sapi = $events->collector()->getSapi();
+        /** @var iHttpRequest $httpRequest */
+        $httpRequest = $sapi->services()->get(ServiceRequest::NAME);
+
+        if ( $httpRequest->getMethod() == 'HEAD' )
+            // Response To HEAD request is not necessary!
+            return $this;
+
+
         $self = $this;
         $events
             ## give themes and initialize
