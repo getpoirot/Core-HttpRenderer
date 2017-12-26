@@ -9,7 +9,7 @@ foreach ($messages as $type => $tMess) {
         $css = ($type == 'error') ? 'danger' : $type;
         ?>
         <div class="alert alert-<?php echo $css ?>" role="alert">
-            <?php echo $m['message']; ?>
+            <?php echo $m['value']; ?>
         </div>
     <?php }
 }
