@@ -32,11 +32,12 @@ class ListenerError
 
 
     /**
-     * @param \Exception             $exception
-     * @param aSapi                  $sapi
-     * @param Sapi\Event\EventError  $event
+     * @param \Exception $exception
+     * @param aSapi $sapi
+     * @param Sapi\Event\EventError $event
      *
-     * @return void|array
+     * @return array|void
+     * @throws \Exception
      */
     function __invoke($exception = null, aSapi $sapi = null, $event = null)
     {
@@ -50,11 +51,12 @@ class ListenerError
         # View Script Model Template
         #
         $scriptViewModel = $viewRenderStrategy->viewModelOfScripts();
-        if ( null === $errorTemplate   = $this->_attainViewScriptTemplateOfError($exception) )
+        if ( null === $errorTemplate = $this->_attainViewScriptTemplateOfError($exception) )
             throw new \Exception(sprintf(
                 'Cant find error template while exception (%s) catch.'
                 , get_class($exception)
             ));
+
 
         $scriptViewModel->setTemplate((is_array($errorTemplate)) ? $errorTemplate[0] : $errorTemplate);
 
@@ -63,6 +65,7 @@ class ListenerError
         #
         $layoutViewModel = $viewRenderStrategy->viewModelOfLayouts();
         $layoutTemplate  = (is_array($errorTemplate)) ? $errorTemplate[1] : $this->_attainLayoutTemplate();
+
         if ($layoutTemplate)
             $layoutViewModel->setTemplate($layoutTemplate);
         else
@@ -143,6 +146,7 @@ class ListenerError
         foreach (clone $this->themeQueue as $theme)
         {
             $templates = @$theme->layout['exception'];
+
             if ( is_array($templates) ) {
                 if (isset($templates['Exception']) && isset($templates['Exception'][1])) {
                     #! here (blank) is defined as default layout for all error pages
@@ -152,6 +156,7 @@ class ListenerError
                 }
             }
         }
+
 
         return $exceptionTemplate;
     }
