@@ -14,7 +14,11 @@ use Poirot\Http\Interfaces\iHttpResponse;
 use Poirot\Ioc\Container;
 
 use Poirot\Application\Sapi\Event\EventHeapOfSapi;
+use Poirot\Ioc\instance;
+use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Std\Environment\EnvServerDefault;
+use Poirot\Std\Struct\aDataAbstract;
+use Poirot\Std\Struct\DataEntity;
 use Poirot\Std\Type\StdTravers;
 use ReflectionClass;
 
@@ -26,6 +30,8 @@ use ReflectionClass;
 class RenderJsonStrategy
     extends aRenderStrategy
 {
+    const CONF_KEY = 'json_renderer';
+
     /** @var Container */
     protected $sc;
     protected $request;
@@ -60,8 +66,8 @@ class RenderJsonStrategy
         $events
             ->on(
                 EventHeapOfSapi::EVENT_APP_RENDER
-                , function ($result = null, $sapi = null) use ($self) {
-                    return $self->createResponseFromResult($result, $sapi);
+                , function ($result = null, $sapi = null, $route_match = null) use ($self) {
+                    return $self->createResponseFromResult($result, $sapi, $route_match);
                 }
                 , 100
             )
@@ -87,7 +93,7 @@ class RenderJsonStrategy
      *
      * @return array|void
      */
-    protected function createResponseFromResult($result = null, $sapi = null)
+    protected function createResponseFromResult($result = null, $sapi = null, $route_match = null)
     {
         if (! $this->canHandle() )
             return null;
@@ -96,15 +102,30 @@ class RenderJsonStrategy
             // Response Prepared; Do Nothing.
             return null;
 
+        if (! (is_array($result) || $result instanceof \Traversable) )
+            // Result Can`t Handle With Json Renderer!
+            return null;
 
+
+        ## Handle Result Registered Hydration
+        #
         if ( is_array($result) )
             $result = new \ArrayIterator($result);
 
-        if ( $result instanceof \Traversable ) {
-            $result = new StdTravers($result);
-            $result = $result->toArray(null, true);
-        }
-        
+        if ( $result instanceof \Traversable )
+            $result = StdTravers::of($result)->toArray(null, true);
+
+
+        $result = $this->_handleResultHydration($result, $route_match);
+
+
+
+        ## Build Response
+        #
+        if ( $result instanceof \Traversable )
+            $result = StdTravers::of($result)->toArray(null, true);
+
+
         $result = [
             'status' => 'OK',
             'result' => $result
@@ -226,6 +247,94 @@ class RenderJsonStrategy
                 $values = $h->renderValueLine();
                 if (strtolower($values) === 'application/json')
                     return $this->canHandle = true;
+            }
+        }
+    }
+
+    /**
+     * Handle Hydrate Chain Of Result
+     *
+     * @param \Traversable|array $result
+     * @param iRouterStack       $routeMatch
+     *
+     *
+     * @return array|\Traversable
+     */
+    private function _handleResultHydration($result, $routeMatch)
+    {
+        ## Get Hydrator if has registered
+        #
+        $routeName = ($routeMatch) ? $routeMatch->getName() : null;
+
+        if (null === $confHydration = $this->_getConf('routes', $routeName) )
+            // looking for aliases hydration
+            $confHydration = $this->_getFromAliases($routeName);
+
+        if ( null === $confHydration )
+            // No Hydration Registered With Merged Configs
+            return $result;
+
+
+        ## Chain Hydrations
+        #
+        while ( $hydrator = array_shift($confHydration) )
+        {
+            if (! is_object($hydrator) )
+                $hydrator = \Poirot\Ioc\newInitIns(new instance($hydrator));
+
+
+            if (! $hydrator instanceof aDataAbstract )
+                throw new \RuntimeException(sprintf(
+                    'Hydrator Invalid For Route (%s), given: (%s).'
+                    , $routeName, get_class($hydrator)
+                ));
+
+
+            $result = $hydrator->import($result);
+        }
+
+
+        return $result;
+    }
+
+    /**
+     * Get Config Values
+     *
+     * Argument can passed and map to config if exists [$key][$_][$__] ..
+     *
+     * @param $key
+     * @param null $_
+     *
+     * @return mixed|null
+     * @throws \Exception
+     */
+    protected function _getConf($key = null, $_ = null)
+    {
+        // retrieve and cache config
+        $services = $this->sc;
+
+        /** @var aSapi $config */
+        $config = $services->get('/sapi');
+        $config = $config->config();
+        /** @var DataEntity $config */
+        $config = $config->get( self::CONF_KEY, [] );
+        foreach (func_get_args() as $key) {
+            if (! isset($config[$key]) )
+                return null;
+
+            $config = $config[$key];
+        }
+
+        return $config;
+    }
+
+    private function _getFromAliases($routeName)
+    {
+        $confAliases = $this->_getConf('aliases');
+        foreach ($confAliases as $routeAlias => $routes) {
+            if (in_array($routeName, $routes)) {
+                $confRoutes = $this->_getConf('routes', $routeAlias);
+                return $confRoutes;
             }
         }
     }
