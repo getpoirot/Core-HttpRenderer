@@ -330,7 +330,10 @@ class RenderJsonStrategy
 
     private function _getFromAliases($routeName)
     {
-        $confAliases = $this->_getConf('aliases');
+        if (null === $confAliases = $this->_getConf('aliases') )
+            return null;
+
+
         foreach ($confAliases as $routeAlias => $routes) {
             if (in_array($routeName, $routes)) {
                 $confRoutes = $this->_getConf('routes', $routeAlias);
