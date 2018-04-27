@@ -17,6 +17,7 @@ use Poirot\Router\RouterStack;
 
 use Poirot\Std\Struct\CollectionPriority;
 use Poirot\Std\Struct\DataEntity;
+use Poirot\View\aViewModel;
 use Poirot\View\DecorateViewModel;
 use Poirot\View\Interfaces\iViewModel;
 use Poirot\View\Interfaces\iViewModelPermutation;
@@ -28,6 +29,8 @@ class RenderDefaultStrategy
     extends aRenderStrategy
 {
     const CONF_KEY = 'view_renderer';
+    const CONF_ROUTE_PARAMS = 'view_renderer';
+
 
     const PRIORITY_CREATE_VIEWMODEL_RESULT    = -10;
     const PRIORITY_PREPARE_VIEWMODEL_TEMPLATE = -100;
@@ -256,7 +259,8 @@ class RenderDefaultStrategy
      *
      * priority -10
      *
-     * @param mixed $result Result from dispatch action
+     * @param mixed        $result      Result from dispatch action
+     * @param iRouterStack $route_match
      *
      * @return array|void
      */
@@ -267,23 +271,31 @@ class RenderDefaultStrategy
             return;
 
 
-        if (\Poirot\Std\isStringify($result)) {
-            ## null, string, objects with __toString
-            $viewModel = new ViewModelStatic();
-            $viewModel->setContent($result);
-            return ['result' => $viewModel];
-        }
-        elseif (
-            is_array($result)
-            || $result instanceof \Traversable
-        ) {
-            $viewModel = $this->viewModelOfScripts();
-            $viewModel->setVariables($result);
-            // prepare layout and templating
-            $viewModel = $this->_preScriptViewModelTemplate($viewModel, $route_match);
 
-            return ['result' => $viewModel];
+        ## Create View Model From Result
+        #
+        $viewModel = $result;
+        if (! $viewModel instanceof iViewModel)
+        {
+            if (\Poirot\Std\isStringify($result)) {
+                ## null, string, objects with __toString
+                $viewModel = new ViewModelStatic();
+                $viewModel->setContent($result);
+
+            } elseif (
+                is_array($result)
+                || $result instanceof \Traversable
+            ) {
+                $viewModel = $this->viewModelOfScripts();
+                $viewModel->setVariables($result);
+            }
         }
+
+
+        ## prepare layout and template
+        #
+        $viewModel = $this->_preScriptViewModelTemplate($viewModel, $route_match);
+        return ['result' => $viewModel];
     }
 
     /**
@@ -377,27 +389,40 @@ class RenderDefaultStrategy
      * @param iViewModel   $result      Result from dispatch action
      * @param iRouterStack $route_match
      *
-     * @return ViewModelTemplate
+     * @return iViewModel|ViewModelTemplate
      */
     private function _preScriptViewModelTemplate(iViewModel $result = null, $route_match = null)
     {
-        $viewScriptModel = clone $result;
+        $viewScriptModel = $result;
+        $routeParams     = $route_match->params()->get(self::CONF_ROUTE_PARAMS);
 
-        // Achieve Template Name From Matched Route:
-        if (! $route_match )
-            ## using default view script template
-            return $result;
 
-        $template  = $viewScriptModel->getTemplate();
-        $routeName = $route_match->getName();
-        if ( $template && (false === strpos($template, RouterStack::SEPARATOR)) )
-            ## if template name not include separator, like (about)
-            ## prefixed with route match name
-            $template = substr($routeName, 0, strrpos($routeName, RouterStack::SEPARATOR)).RouterStack::SEPARATOR.$template;
-        elseif (! $template )
-            $template = $routeName;
+        ## Achieve Template Name From Matched Route:
+        #
+        if ( $route_match && ($viewScriptModel instanceof ViewModelTemplate || $viewScriptModel instanceof DecorateViewModel) )
+        {
+            $routeName = $route_match->getName();
+            $template  = (isset($routeParams['template'])) ? $routeParams['template'] : $viewScriptModel->getTemplate();
+            if ( $template && (false === strpos($template, RouterStack::SEPARATOR)) )
+                ## if template name not include separator, like (about)
+                ## prefixed with route match name
+                $template = substr($routeName, 0, strrpos($routeName, RouterStack::SEPARATOR)).RouterStack::SEPARATOR.$template;
+            elseif (! $template )
+                $template = $routeName;
 
-        $viewScriptModel->setTemplate($template);
+
+            $viewScriptModel->setTemplate($template);
+        }
+
+        ## Final Template Settings:
+        #
+        if ($route_match && $viewScriptModel instanceof aViewModel)
+        {
+            (! isset($routeParams['final']) ) ?: $viewScriptModel->setFinal($routeParams['final']);
+        }
+
+
+
         return $viewScriptModel;
     }
 
