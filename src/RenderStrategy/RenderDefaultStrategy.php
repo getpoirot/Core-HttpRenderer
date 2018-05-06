@@ -394,7 +394,7 @@ class RenderDefaultStrategy
     private function _preScriptViewModelTemplate(iViewModel $result = null, $route_match = null)
     {
         $viewScriptModel = $result;
-        $routeParams     = $route_match->params()->get(self::CONF_ROUTE_PARAMS);
+        $routeParams     = ($route_match) ? $route_match->params()->get(self::CONF_ROUTE_PARAMS) : null;
 
 
         ## Achieve Template Name From Matched Route:
