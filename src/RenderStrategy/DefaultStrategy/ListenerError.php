@@ -64,7 +64,7 @@ class ListenerError
         # Error Layout Template
         #
         $layoutViewModel = $viewRenderStrategy->viewModelOfLayouts();
-        $layoutTemplate  = (is_array($errorTemplate)) ? $errorTemplate[1] : $this->_attainLayoutTemplate();
+        $layoutTemplate  = (is_array($errorTemplate)) ? $errorTemplate[1] : $this->_attainLayoutTemplate($errorTemplate);
 
         if ($layoutTemplate)
             $layoutViewModel->setTemplate($layoutTemplate);
@@ -139,24 +139,27 @@ class ListenerError
         return $exceptionTemplate;
     }
 
-    protected function _attainLayoutTemplate()
+    protected function _attainLayoutTemplate($errTemplate)
     {
-        $exceptionTemplate = null;
+        if ( is_array($errTemplate) && isset($errTemplate[1]) )
+            // '\Exception' => ['error/error', 'blank'],
+            return $errTemplate[1];
 
+
+        $exceptionTemplate = null;
         foreach (clone $this->themeQueue as $theme)
         {
-            $templates = @$theme->layout['exception'];
-
+            $templates = @$theme->layout;
             if ( is_array($templates) ) {
-                if (isset($templates['Exception']) && isset($templates['Exception'][1])) {
-                    #! here (blank) is defined as default layout for all error pages
-                    #- 'Exception' => ['error/error', 'blank'],
-                    $exceptionTemplate = $templates['Exception'][1];
+                if ( isset($templates['default']) )
+                    // here (blank) is defined as default layout for all error pages
+                    // 'layout' => [
+                    //   'default' => 'blank',
+                    //   ...
+                    $exceptionTemplate = $templates['default'];
                     break;
                 }
-            }
         }
-
 
         return $exceptionTemplate;
     }
