@@ -2,6 +2,7 @@
 
 use Module\HttpRenderer\RenderStrategy\RenderDefaultStrategy;
 use Module\HttpRenderer\RenderStrategy\RenderJsonStrategy;
+use Module\HttpRenderer\RenderStrategy\RenderRouterStrategy;
 use Module\HttpRenderer\Services\ServiceRenderStrategiesContainer;
 
 return [
@@ -16,8 +17,9 @@ return [
     \Module\HttpRenderer\Module::CONF => [
         ServiceRenderStrategiesContainer::CONF => [
             'services' => [
+                'router'  => RenderRouterStrategy::class,
                 'default' => RenderDefaultStrategy::class,
-                'json'    => RenderJsonStrategy::class
+                'json'    => RenderJsonStrategy::class,
             ],
         ],
     ],

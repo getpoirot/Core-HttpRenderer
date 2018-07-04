@@ -19,6 +19,7 @@ use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Std\Environment\EnvServerDefault;
 use Poirot\Std\Struct\aDataAbstract;
 use Poirot\Std\Struct\DataEntity;
+use Poirot\Std\Type\StdArray;
 use Poirot\Std\Type\StdTravers;
 use ReflectionClass;
 
@@ -277,6 +278,7 @@ class RenderJsonStrategy
 
         ## Chain Hydrations
         #
+        $r = [];
         while ( $hydrator = array_shift($confHydration) )
         {
             if (! is_object($hydrator) )
@@ -290,11 +292,42 @@ class RenderJsonStrategy
                 ));
 
 
-            $result = $hydrator->import($result);
+            $h = $hydrator->import($result);
+            $h = StdTravers::of($h)->toArray(null, true);
+            $r = $this->mergeRecursive($r, $h);
         }
 
 
-        return $result;
+        return $r;
+    }
+
+    function mergeRecursive(array $a, array $b)
+    {
+        foreach ($b as $key => $value)
+        {
+            if (! array_key_exists($key, $a)) {
+                // key not exists so simply add it to array
+                $a[$key] = $value;
+                continue;
+            }
+
+
+            if ( is_int($key) && !is_array($value)) {
+                // [ 'value' ] if value not exists append to array!
+                if (! in_array($value, $a) )
+                    $a[] = $value;
+
+            } elseif (is_array($value) && is_array($a[$key]))  {
+                // a= [k=>[]] , b=[k=>['value']]
+                $a[$key] = $this->mergeRecursive($a[$key], $value);
+
+            } else {
+                // save old value and push them into new array list
+                $a[$key] = $value;
+            }
+        }
+
+        return $a;
     }
 
     /**
