@@ -7,7 +7,7 @@ return [
         'route' => 'RouteMethodSegment',
         'options' => [
             'method'   => 'GET',
-            'criteria' => '/p/theme/:file~.+~',
+            'criteria' => '/p/theme</:file~.+~>',
             'match_whole' => false,
         ],
         'params' => [
