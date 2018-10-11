@@ -1,6 +1,7 @@
 <?php
 namespace Module\HttpRenderer\RenderStrategy;
 
+use ReflectionClass;
 use Module\HttpFoundation\Events\Listener\ListenerDispatch;
 use Poirot\Application\aSapi;
 use Poirot\Application\Sapi\Event\EventError;
@@ -19,9 +20,7 @@ use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Std\Environment\EnvServerDefault;
 use Poirot\Std\Struct\aDataAbstract;
 use Poirot\Std\Struct\DataEntity;
-use Poirot\Std\Type\StdArray;
 use Poirot\Std\Type\StdTravers;
-use ReflectionClass;
 
 
 /**
