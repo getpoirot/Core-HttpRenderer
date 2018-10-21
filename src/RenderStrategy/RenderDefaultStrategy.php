@@ -292,6 +292,12 @@ class RenderDefaultStrategy
         }
 
 
+        if (! $viewModel instanceof iViewModel)
+            throw new \RuntimeException(sprintf(
+                'View Result (%s) Is Not Acceptable.'
+                , \Poirot\Std\flatten($viewModel)
+            ));
+
         ## prepare layout and template
         #
         $viewModel = $this->_preScriptViewModelTemplate($viewModel, $route_match);
