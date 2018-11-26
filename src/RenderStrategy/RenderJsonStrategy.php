@@ -266,38 +266,50 @@ class RenderJsonStrategy
         #
         $routeName = ($routeMatch) ? $routeMatch->getName() : null;
 
-        if (null === $confHydration = $this->_getConf('routes', $routeName) )
-            // looking for aliases hydration
-            $confHydration = $this->_getFromAliases($routeName);
-
-        if ( null === $confHydration )
-            // No Hydration Registered With Merged Configs
-            return $result;
 
 
-        ## Chain Hydrations
+        ## Merge Hydration Renderer
         #
-        $r = [];
-        while ( $hydrator = array_shift($confHydration) )
+        $r = null;
+
+        foreach ( $this->_yieldRenderConf($routeName) as  $confHydration )
         {
-            if (! is_object($hydrator) )
-                $hydrator = \Poirot\Ioc\newInitIns(new instance($hydrator));
+            if ($r === null)
+                $r = [];
+
+            // Chain Hydration
+            //
+            $mergeResult = true;
+            while ( $hydrator = array_shift($confHydration) )
+            {
+                if ($hydrator == '_') {
+                    $mergeResult = false;
+                    continue;
+                }
 
 
-            if (! $hydrator instanceof aDataAbstract )
-                throw new \RuntimeException(sprintf(
-                    'Hydrator Invalid For Route (%s), given: (%s).'
-                    , $routeName, get_class($hydrator)
-                ));
+                if (! is_object($hydrator) )
+                    $hydrator = \Poirot\Ioc\newInitIns( new instance($hydrator) );
+
+                if (! $hydrator instanceof aDataAbstract )
+                    throw new \RuntimeException(sprintf(
+                        'Hydrator Invalid For Route (%s), given: (%s).'
+                        , $routeName, get_class($hydrator)
+                    ));
 
 
-            $h = $hydrator->import($result);
-            $h = StdTravers::of($h)->toArray(null, true);
-            $r = $this->mergeRecursive($r, $h);
+                $h = $hydrator->import($result);
+                $h = StdTravers::of($h)->toArray(null, true);
+                $r = $this->mergeRecursive($r, $h);
+            }
+
+
+            if ( $mergeResult )
+                $r = array_merge($result, $r);
         }
 
 
-        return $r;
+        return ($r === null) ? $result : $r;
     }
 
     function mergeRecursive(array $a, array $b)
@@ -327,6 +339,26 @@ class RenderJsonStrategy
         }
 
         return $a;
+    }
+
+
+    private function _yieldRenderConf($routeName)
+    {
+        if ( $confHydration = $this->_getConf('routes', $routeName) )
+            yield $confHydration;
+
+
+        // looking for aliases hydration
+        if ( $confAliases = $this->_getConf('aliases') )
+        {
+            foreach ($confAliases as $routeAlias => $routes) {
+                if ( in_array($routeName, $routes) )
+                    yield $this->_getConf('routes', $routeAlias);
+            }
+        }
+
+
+        return null;
     }
 
     /**
