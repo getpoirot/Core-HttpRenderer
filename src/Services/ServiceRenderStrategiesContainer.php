@@ -1,11 +1,11 @@
 <?php
 namespace Module\HttpRenderer\Services;
 
-use Module\HttpRenderer\Services\RenderStrategies\PluginsOfRenderStrategy;
 use Poirot\Application\aSapi;
 use Poirot\Ioc\Container\BuildContainer;
 use Poirot\Ioc\Container\Service\aServiceContainer;
-use Poirot\Std\Struct\DataEntity;
+
+use Module\HttpRenderer\Services\RenderStrategies\PluginsOfRenderStrategy;
 
 
 class ServiceRenderStrategiesContainer
@@ -15,9 +15,10 @@ class ServiceRenderStrategiesContainer
 
 
     /**
-     * Create Service
+     * @inheritdoc
      *
-     * @return mixed
+     * @return PluginsOfRenderStrategy
+     * @throws \Exception
      */
     function newService()
     {
@@ -29,6 +30,7 @@ class ServiceRenderStrategiesContainer
         $plugins = new PluginsOfRenderStrategy($builder);
         return $plugins;
     }
+
 
     // ..
 
@@ -46,9 +48,7 @@ class ServiceRenderStrategiesContainer
         /** @var aSapi $config */
         $config = $services->get('/sapi');
         $config = $config->config();
-        /** @var DataEntity $config */
-        $config = $config->get( \Module\HttpRenderer\Module::CONF, array() );
-        $config = @$config[self::CONF];
+        $config = $config->{\Module\HttpRenderer\Module::class}->{self::CONF};
         return $config;
     }
 }

@@ -19,11 +19,11 @@ use Poirot\Ioc\instance;
 use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Std\Environment\EnvServerDefault;
 use Poirot\Std\Struct\aDataAbstract;
-use Poirot\Std\Struct\DataEntity;
 use Poirot\Std\Type\StdTravers;
 
 
 /**
+ * // TODO somehow i think we can polish this renderer
  *
  * @see doAttachDefaultEvents::_attachDefaultEvents
  */
@@ -40,7 +40,8 @@ class RenderJsonStrategy
 
 
     /**
-     * aAction constructor.
+     * Constructor
+     *
      * @param iHttpRequest $httpRequest @IoC /HttpRequest
      */
     function __construct(iHttpRequest $httpRequest)
@@ -50,7 +51,7 @@ class RenderJsonStrategy
 
 
     // Implement Setter/Getter
-    
+
     /**
      * Initialize To Events
      *
@@ -59,6 +60,7 @@ class RenderJsonStrategy
      * @param EventHeapOfSapi|iEvent $events
      *
      * @return $this
+     * @throws \Exception
      */
     function attachToEvent(iEvent $events)
     {
@@ -91,7 +93,8 @@ class RenderJsonStrategy
      * @param mixed $result Result from dispatch action
      * @param aSapi $sapi
      *
-     * @return array|void
+     * @return array|null
+     * @throws \Exception
      */
     protected function createResponseFromResult($result = null, $sapi = null, $route_match = null)
     {
@@ -144,13 +147,14 @@ class RenderJsonStrategy
     /**
      * note: the result param from this will then pass
      *       to render event by sapi application
-     *      @see self::createResponseFromResult()
-     * 
+     * @see self::createResponseFromResult()
+     *
      * @param \Exception $exception
      * @param EventError $event
-     * @param aSapi      $sapi
+     * @param aSapi $sapi
      *
      * @return array
+     * @throws \ReflectionException
      */
     protected function handleErrorRender($exception = null, $event = null, $sapi = null)
     {
@@ -210,15 +214,16 @@ class RenderJsonStrategy
 
         $response->setStatusCode(($exception_code) ? $exception_code : 500);
         $response->headers()->insert(
-            FactoryHttpHeader::of(array('Content-Type' => $this->getContentType())) );
+            FactoryHttpHeader::of(['Content-Type' => $this->getContentType()])
+        );
         $response->setBody($content);
 
-        return array(
+        return [
             ListenerDispatch::RESULT_DISPATCH => $response,
 
             # disable default throw exception listener at the end
             'exception' => null, // Grab Exception and not pass to other handlers
-        );
+        ];
     }
 
     /**
@@ -255,10 +260,11 @@ class RenderJsonStrategy
      * Handle Hydrate Chain Of Result
      *
      * @param \Traversable|array $result
-     * @param iRouterStack       $routeMatch
+     * @param iRouterStack $routeMatch
      *
      *
      * @return array|\Traversable
+     * @throws \Exception
      */
     private function _handleResultHydration($result, $routeMatch)
     {
@@ -362,6 +368,7 @@ class RenderJsonStrategy
     }
 
     /**
+     * // TODO define as trait to use within services
      * Get Config Values
      *
      * Argument can passed and map to config if exists [$key][$_][$__] ..
@@ -380,8 +387,8 @@ class RenderJsonStrategy
         /** @var aSapi $config */
         $config = $services->get('/sapi');
         $config = $config->config();
-        /** @var DataEntity $config */
-        $config = $config->get( self::CONF_KEY, [] );
+        $config = $config->{\Module\HttpRenderer\Module::class}->{self::CONF_KEY};
+
         foreach (func_get_args() as $key) {
             if (! isset($config[$key]) )
                 return null;

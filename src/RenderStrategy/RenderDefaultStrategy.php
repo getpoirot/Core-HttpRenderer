@@ -16,7 +16,6 @@ use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Router\RouterStack;
 
 use Poirot\Std\Struct\CollectionPriority;
-use Poirot\Std\Struct\DataEntity;
 use Poirot\View\aViewModel;
 use Poirot\View\DecorateViewModel;
 use Poirot\View\Interfaces\iViewModel;
@@ -79,6 +78,7 @@ class RenderDefaultStrategy
      * Get View Script Model
      *
      * @return ViewModelTemplate|iViewModelPermutation
+     * @throws \Exception
      */
     function viewModelOfScripts()
     {
@@ -92,6 +92,7 @@ class RenderDefaultStrategy
      * Get View Template Decorator Model
      *
      * @return ViewModelTemplate|iViewModelPermutation
+     * @throws \Exception
      */
     function viewModelOfLayouts()
     {
@@ -127,6 +128,7 @@ class RenderDefaultStrategy
      * @param EventHeapOfSapi|iEvent $events
      *
      * @return $this
+     * @throws \Exception
      */
     function attachToEvent(iEvent $events)
     {
@@ -203,6 +205,7 @@ class RenderDefaultStrategy
      * ! if not invokeWhen then just give default themes on bootstrap
      *
      * @param boolean $invokeWhen
+     * @throws \Exception
      */
     protected function giveThemes($invokeWhen)
     {
@@ -259,10 +262,11 @@ class RenderDefaultStrategy
      *
      * priority -10
      *
-     * @param mixed        $result      Result from dispatch action
+     * @param mixed $result Result from dispatch action
      * @param iRouterStack $route_match
      *
      * @return array|void
+     * @throws \Exception
      */
     protected function createScriptViewModelFromResult($result = null, $route_match = null)
     {
@@ -317,7 +321,8 @@ class RenderDefaultStrategy
      * @param mixed $result Result from dispatch action
      * @param RouterStack $route_match
      *
-     * @return array|void
+     * @return array|null
+     * @throws \Exception
      */
     protected function injectToLayoutDecorator($result = null, $route_match = null)
     {
@@ -451,9 +456,8 @@ class RenderDefaultStrategy
 
         /** @var aSapi $config */
         $config = $services->get('/sapi');
-        $orig = $config  = $config->config();
-        /** @var DataEntity $config */
-        $config = $config->get( self::CONF_KEY, [] );
+        $config = $config->config();
+        $config = $config->{\Module\HttpRenderer\Module::class}->{self::CONF_KEY};
 
         foreach (func_get_args() as $key) {
             if (! isset($config[$key]) )

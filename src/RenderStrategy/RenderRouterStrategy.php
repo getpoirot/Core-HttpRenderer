@@ -7,7 +7,7 @@ use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Std\Struct\DataEntity;
 
-
+// TODO seems almost not needed or atleast cause bad design problems
 class RenderRouterStrategy
     extends aRenderStrategy
 {
@@ -22,6 +22,7 @@ class RenderRouterStrategy
      * @param EventHeapOfSapi|iEvent $events
      *
      * @return $this
+     * @throws \Exception
      */
     function attachToEvent(iEvent $events)
     {
@@ -95,6 +96,7 @@ class RenderRouterStrategy
         }
 
 
+        // TODO using like this is almost unused
         $strategy->attachToEvent($events);
 
         if ( is_callable($strategy) )

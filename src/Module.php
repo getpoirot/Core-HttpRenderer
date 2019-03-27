@@ -1,9 +1,6 @@
 <?php
 namespace Module\HttpRenderer;
 
-use Module\HttpRenderer\RenderStrategy\aRenderStrategy;
-use Module\HttpRenderer\Services\RenderStrategies\PluginsOfRenderStrategy;
-use Poirot\Application\Interfaces\iApplication;
 use Poirot\Application\Interfaces\Sapi\iSapiModule;
 use Poirot\Application\aSapi;
 use Poirot\Application\Interfaces\Sapi;
@@ -15,7 +12,6 @@ use Poirot\Ioc\Container;
 use Poirot\Ioc\Container\BuildContainer;
 use Poirot\Loader\Autoloader\LoaderAutoloadAggregate;
 use Poirot\Loader\Autoloader\LoaderAutoloadNamespace;
-use Poirot\Loader\Interfaces\iLoaderAutoload;
 use Poirot\Loader\LoaderAggregate;
 use Poirot\Loader\LoaderNamespaceStack;
 
@@ -23,8 +19,14 @@ use Poirot\Router\BuildRouterStack;
 use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Std\Interfaces\Struct\iDataEntity;
 
+use Module\Foundation\Services\PathService\PathAction;
+use Module\HttpRenderer\Services\RenderStrategies\PluginsOfRenderStrategy;
+
 
 /**
+ * // TODO remove unnecessary assets from theme folder
+ * // TODO define some sample pages + using json renderer hydration samples
+ *
  * - Provide Render Strategies To Represent Dispatch Result.
  *   include html and json render strategy,
  *   html render strategy has become with extensible template engine mechanism.
@@ -54,16 +56,7 @@ class Module implements iSapiModule
 
 
     /**
-     * Init Module Against Application
-     *
-     * - determine sapi server, cli or http
-     *
-     * priority: 1000 A
-     *
-     * @param iApplication|aSapi $sapi Application Instance
-     *
-     * @return false|null False mean not setup with other module features (skip module)
-     * @throws \Exception
+     * @inheritdoc
      */
     function initialize($sapi)
     {
@@ -73,18 +66,11 @@ class Module implements iSapiModule
     }
 
     /**
-     * Register class autoload on Autoload
-     *
-     * priority: 1000 B
-     *
-     * @param LoaderAutoloadAggregate $baseAutoloader
-     *
-     * @return iLoaderAutoload|array|\Traversable|void
+     * @inheritdoc
      */
     function initAutoload(LoaderAutoloadAggregate $baseAutoloader)
     {
-        #$nameSpaceLoader = \Poirot\Loader\Autoloader\LoaderAutoloadNamespace::class;
-        $nameSpaceLoader = 'Poirot\Loader\Autoloader\LoaderAutoloadNamespace';
+        $nameSpaceLoader = \Poirot\Loader\Autoloader\LoaderAutoloadNamespace::class;
         /** @var LoaderAutoloadNamespace $nameSpaceLoader */
         $nameSpaceLoader = $baseAutoloader->loader($nameSpaceLoader);
         $nameSpaceLoader->addResource(__NAMESPACE__, __DIR__);
@@ -92,35 +78,18 @@ class Module implements iSapiModule
     }
 
     /**
-     * Initialize Module Manager
-     *
-     * priority: 1000 C
-     *
-     * @param iModuleManager $moduleManager
-     *
-     * @return void
+     * @inheritdoc
      */
     function initModuleManager(iModuleManager $moduleManager)
     {
-        // ( ! ) ORDER IS MANDATORY
-
+        // Module Is Required.
         if (! $moduleManager->hasLoaded('HttpFoundation') )
-            // Module Is Required.
             $moduleManager->loadModule('HttpFoundation');
 
     }
 
     /**
-     * Register config key/value
-     *
-     * priority: 1000 D
-     *
-     * - you may return an array or Traversable
-     *   that would be merge with config current data
-     *
-     * @param iDataEntity $config
-     *
-     * @return array|\Traversable
+     * @inheritdoc
      */
     function initConfig(iDataEntity $config)
     {
@@ -128,20 +97,11 @@ class Module implements iSapiModule
     }
 
     /**
-     * Get Nested Module Services
-     *
-     * it can be used to manipulate other registered services by modules
-     * with passed Container instance as argument.
-     *
-     * priority not that serious
-     *
-     * @param Container $moduleContainer
-     *
-     * @return null|array|BuildContainer|\Traversable
+     * @inheritdoc
      */
     function getServices(Container $moduleContainer = null)
     {
-        $conf    = \Poirot\Config\load(__DIR__ . '/../config/cor-http_renderer.services');
+        $conf    = include __DIR__ . '/../config/cor-http_renderer.services.conf.php';
 
         $builder = new BuildContainer;
         $builder->with($builder::parseWith($conf));
@@ -149,52 +109,38 @@ class Module implements iSapiModule
     }
 
     /**
-     * Attach Listeners To Application Events
-     * @see ApplicationEvents
-     *
-     * priority: Just Before Dispatch Request When All Modules Loaded
-     *           Completely
-     *
-     * @param EventHeapOfSapi $events
-     *
-     * @return void
+     * @inheritdoc
      */
     function initSapiEvents(EventHeapOfSapi $events)
     {
-        // EVENT: Render Dispatch Result .................................................
-
-        # achieve viewModel
         /** @var aSapi $sapi */
         $sapi     = $events->collector()->getSapi();
         $services = $sapi->services();
 
+        // Attach Renderer To Application Events; Lets Strategies Rules ...
         /** @var PluginsOfRenderStrategy $renderStrategies */
         $renderStrategies = $services->get('/module/httpRenderer/services/RenderStrategies');
-        foreach ( $renderStrategies->listServices() as $strategyName ) {
-            // Attach Renderer To Application Events; Lets Strategies Rules ...
-            $strategy = $renderStrategies->get($strategyName);
-            /** @var aRenderStrategy $strategy */
-            $strategy->attachToEvent($events);
-        }
+        $renderStrategies->attachToEvent($events);
     }
 
     /**
-     * Resolve to service with name
+     * @inheritdoc
      *
-     * - each argument represent requested service by registered name
-     *   if service not available default argument value remains
-     * - "services" as argument will retrieve services container itself.
+     * @param LoaderAggregate $viewModelResolver
+     * @param iRouterStack    $router
+     * @param PathAction      $path              @IoC /module/foundation/services/Path
      *
-     * ! after all modules loaded
-     *
-     * @param LoaderAggregate  $viewModelResolver
-     *
-     * @internal param null $services service names must have default value
+     * @throws \Exception
      */
-    function resolveRegisteredServices($viewModelResolver = null, $router = null)
-    {
-        # Register Routes:
+    function resolveRegisteredServices(
+        $viewModelResolver = null
+        , $router = null
+        , PathAction $path = null
+    ) {
+        ## Register Routes:
+        #
         $this->_setupHttpRouter($router);
+
 
         # Attach Module Scripts To View Resolver:
         #
@@ -205,6 +151,15 @@ class Module implements iSapiModule
             'partial/' => __DIR__.'/../view/partial',
             'error/'   => __DIR__.'/../view/error',
         ]);
+
+        ## Register Paths and Variables:
+        #
+        if ($path)
+        {
+            // According to route name 'www-theme' to serve statics files
+            // @see cor-http_renderer.routes
+            $path->setPath('www-theme', "\$baseUrl/p/theme/");
+        }
     }
 
 

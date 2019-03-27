@@ -1,30 +1,21 @@
 <?php
-
 use Module\HttpRenderer\RenderStrategy\RenderDefaultStrategy;
 use Module\HttpRenderer\RenderStrategy\RenderJsonStrategy;
 use Module\HttpRenderer\RenderStrategy\RenderRouterStrategy;
 use Module\HttpRenderer\Services\ServiceRenderStrategiesContainer;
 
-return [
-    \Module\Foundation\Services\PathService::CONF => [
-        'paths' => [
-            // According to route name 'www-assets' to serve statics files
-            // @see cor-http_foundation.routes
-            'www-theme' => "\$baseUrl/p/theme/",
-        ],
-    ],
-
-    \Module\HttpRenderer\Module::CONF => [
-        ServiceRenderStrategiesContainer::CONF => [
-            'services' => [
-                'router'  => RenderRouterStrategy::class,
-                'default' => RenderDefaultStrategy::class,
-                'json'    => RenderJsonStrategy::class,
-            ],
+return
+[
+    ServiceRenderStrategiesContainer::CONF => [
+        'services' => [
+            'router'  => RenderRouterStrategy::class,
+            'default' => RenderDefaultStrategy::class,
+            'json'    => RenderJsonStrategy::class,
         ],
     ],
 
     // View Renderer Options
+    // TODO add these abilities to JsonRenderer as Some Methods
     RenderDefaultStrategy::CONF_KEY => [
         'themes' => [
             'default' => [
@@ -45,9 +36,31 @@ return [
 
                         ## here (blank) is defined as default layout for all error pages
                         'Exception' => ['error/error', 'blank'],
-                        'Poirot\Application\Exception\exRouteNotMatch' => 'error/404',
+                        \Poirot\Application\Exception\exRouteNotMatch::class => 'error/404',
                     ],
                 ],
+            ],
+        ],
+    ],
+
+    // TODO put real samples
+    // TODO add these abilities to JsonRenderer as Some Methods
+    RenderJsonStrategy::CONF_KEY => [
+        'routes' => [
+            '@cart' => [
+                \Module\Shopping\RenderStrategy\JsonRenderer\CartRenderer::class,
+            ],
+            '@itemsResult' => [
+                \Module\Shopping\RenderStrategy\JsonRenderer\ResultSet\CartItemsResultRenderHydrate::class,
+            ],
+        ],
+        'aliases' => [
+            '@cart' => [
+                'main/shopping/carts/get',
+                'main/shopping/carts/insert',
+            ],
+            '@itemsResult' => [
+                'main/shopping/carts/insert',
             ],
         ],
     ],
