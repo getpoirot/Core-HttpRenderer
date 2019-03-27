@@ -8,7 +8,8 @@
         }
     ]
     , "require": {
-        "poirot/skeleton": "dev-devel"
+        "ext-json": "*"
+        , "poirot/skeleton": "dev-devel"
     }
     , "autoload"  : {
         "psr-4": {
