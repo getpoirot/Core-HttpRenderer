@@ -1,6 +1,7 @@
 <?php
 namespace Module\HttpRenderer\RenderStrategy;
 
+use Poirot\Std\Type\StdArray;
 use ReflectionClass;
 use Module\HttpFoundation\Events\Listener\ListenerDispatch;
 use Poirot\Application\aSapi;
@@ -30,13 +31,14 @@ use Poirot\Std\Type\StdTravers;
 class RenderJsonStrategy
     extends aRenderStrategy
 {
-    const CONF_KEY = 'json_renderer';
+    const CONF = 'json_renderer';
 
     /** @var Container */
     protected $sc;
     protected $request;
 
     protected $canHandle;
+    private $config;
 
 
     /**
@@ -368,7 +370,6 @@ class RenderJsonStrategy
     }
 
     /**
-     * // TODO define as trait to use within services
      * Get Config Values
      *
      * Argument can passed and map to config if exists [$key][$_][$__] ..
@@ -381,13 +382,7 @@ class RenderJsonStrategy
      */
     protected function _getConf($key = null, $_ = null)
     {
-        // retrieve and cache config
-        $services = $this->sc;
-
-        /** @var aSapi $config */
-        $config = $services->get('/sapi');
-        $config = $config->config();
-        $config = $config->{\Module\HttpRenderer\Module::class}->{self::CONF_KEY};
+        $config = $this->config;
 
         foreach (func_get_args() as $key) {
             if (! isset($config[$key]) )
@@ -399,17 +394,22 @@ class RenderJsonStrategy
         return $config;
     }
 
-    private function _getFromAliases($routeName)
+    /**
+     * Build Object With Provided Options
+     *
+     * @param array $options Associated Array
+     * @param bool $throwException Throw Exception On Wrong Option
+     *
+     * @return $this
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     */
+    function with(array $options, $throwException = false)
     {
-        if (null === $confAliases = $this->_getConf('aliases') )
-            return null;
+        if (! $this->config)
+            $this->config = new StdArray;
 
-
-        foreach ($confAliases as $routeAlias => $routes) {
-            if (in_array($routeName, $routes)) {
-                $confRoutes = $this->_getConf('routes', $routeAlias);
-                return $confRoutes;
-            }
-        }
+        $this->config = $this->config->withMergeRecursive(new StdArray($options));
+        return $this;
     }
 }

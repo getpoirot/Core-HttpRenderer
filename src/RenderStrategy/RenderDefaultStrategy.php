@@ -1,21 +1,22 @@
 <?php
 namespace Module\HttpRenderer\RenderStrategy;
 
-use Module\HttpFoundation\ServiceManager\ServiceRequest;
 use Module\HttpRenderer\RenderStrategy\DefaultStrategy\ListenerError;
-use Poirot\Application\aSapi;
 use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 
 use Poirot\Events\Interfaces\iEvent;
 
+use Poirot\Http\HttpRequest;
 use Poirot\Http\Interfaces\iHttpRequest;
 use Poirot\Http\Interfaces\iHttpResponse;
+use Poirot\Http\Interfaces\Respec\iRequestAware;
 use Poirot\Ioc\instance;
 use Poirot\Loader\LoaderNamespaceStack;
 use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Router\RouterStack;
 
 use Poirot\Std\Struct\CollectionPriority;
+use Poirot\Std\Type\StdArray;
 use Poirot\View\aViewModel;
 use Poirot\View\DecorateViewModel;
 use Poirot\View\Interfaces\iViewModel;
@@ -26,15 +27,16 @@ use Poirot\View\ViewModelTemplate;
 
 class RenderDefaultStrategy
     extends aRenderStrategy
+    implements iRequestAware
 {
-    const CONF_KEY = 'view_renderer';
+    const CONF = 'view_renderer';
     const CONF_ROUTE_PARAMS = 'view_renderer';
-
 
     const PRIORITY_CREATE_VIEWMODEL_RESULT    = -10;
     const PRIORITY_PREPARE_VIEWMODEL_TEMPLATE = -100;
     const PRIORITY_DECORATE_VIEWMODEL_LAYOUT  = -900;
     const PRIORITY_FINALIZE                   = -1000;
+
 
     protected $themesQueue;
 
@@ -45,80 +47,11 @@ class RenderDefaultStrategy
 
     protected $defaultLayout = 'default';
     protected $themes_loaded = [];
+    /** @var HttpRequest */
+    protected $httpRequest;
 
+    private $config;
 
-    // Implement Setter/Getter
-
-    /**
-     * Set Default Template Name
-     *
-     * ! name without extension of absolute path
-     *
-     * @param $template
-     *
-     * @return $this
-     */
-    function setDefaultLayout($template)
-    {
-       $this->defaultLayout = (string) $template;
-        return $this;
-    }
-
-    /**
-     * Get Default Template
-     *
-     * @return string
-     */
-    function getDefaultLayout()
-    {
-        return $this->defaultLayout;
-    }
-
-    /**
-     * Get View Script Model
-     *
-     * @return ViewModelTemplate|iViewModelPermutation
-     * @throws \Exception
-     */
-    function viewModelOfScripts()
-    {
-        if (! $this->scriptView )
-            $this->scriptView = $this->sc->fresh('/ViewModel');
-
-        return $this->scriptView;
-    }
-
-    /**
-     * Get View Template Decorator Model
-     *
-     * @return ViewModelTemplate|iViewModelPermutation
-     * @throws \Exception
-     */
-    function viewModelOfLayouts()
-    {
-        if (! $this->templateView ) {
-            $viewAsTemplate = $this->sc->fresh('/ViewModel');
-            $viewAsTemplate->setFinal();
-            $this->templateView = $viewAsTemplate;
-        }
-
-        return $this->templateView;
-    }
-
-    /**
-     * Give Matched Themes Queue
-     *
-     * @return CollectionPriority
-     */
-    protected function themesQueue()
-    {
-        if (! $this->themesQueue )
-            $this->themesQueue = new CollectionPriority;
-
-        return $this->themesQueue;
-    }
-
-    // ...
 
     /**
      * Initialize To Events
@@ -132,12 +65,7 @@ class RenderDefaultStrategy
      */
     function attachToEvent(iEvent $events)
     {
-        /** @var aSapi $sapi */
-        $sapi = $events->collector()->getSapi();
-        /** @var iHttpRequest $httpRequest */
-        $httpRequest = $sapi->services()->get(ServiceRequest::NAME);
-
-        if ( $httpRequest->getMethod() == 'HEAD' )
+        if ( $this->httpRequest->getMethod() == 'HEAD' )
             // Response To HEAD request is not necessary!
             return $this;
 
@@ -149,7 +77,6 @@ class RenderDefaultStrategy
                 EventHeapOfSapi::EVENT_APP_BOOTSTRAP
                 , function () use ($self) {
                     $self->giveThemes(false);
-//                    $self->_ensureThemes();
                 }
                 , 1000
             )
@@ -200,6 +127,92 @@ class RenderDefaultStrategy
     }
 
     /**
+     * Get View Script Model
+     *
+     * @return ViewModelTemplate|iViewModelPermutation
+     * @throws \Exception
+     */
+    function viewModelOfScripts()
+    {
+        if (! $this->scriptView )
+            $this->scriptView = $this->sc->fresh('/ViewModel');
+
+        return $this->scriptView;
+    }
+
+    /**
+     * Get View Template Decorator Model
+     *
+     * @return ViewModelTemplate|iViewModelPermutation
+     * @throws \Exception
+     */
+    function viewModelOfLayouts()
+    {
+        if (! $this->templateView ) {
+            $viewAsTemplate = $this->sc->fresh('/ViewModel');
+            $viewAsTemplate->setFinal();
+            $this->templateView = $viewAsTemplate;
+        }
+
+        return $this->templateView;
+    }
+
+
+    // Options:
+
+    /**
+     * Set Default Template Name
+     *
+     * ! name without extension of absolute path
+     *
+     * @param $template
+     *
+     * @return $this
+     */
+    function setDefaultLayout($template)
+    {
+        $this->defaultLayout = (string) $template;
+        return $this;
+    }
+
+    /**
+     * Get Default Template
+     *
+     * @return string
+     */
+    function getDefaultLayout()
+    {
+        return $this->defaultLayout;
+    }
+
+    /**
+     * Get Content Type That Renderer Will Provide
+     * exp. application/json; text/html
+     *
+     * @return string
+     */
+    function getContentType()
+    {
+        return 'text/html; charset=UTF-8';
+    }
+
+
+    // ..
+
+    /**
+     * Give Matched Themes Queue
+     *
+     * @return CollectionPriority
+     */
+    protected function _themesQueue()
+    {
+        if (! $this->themesQueue )
+            $this->themesQueue = new CollectionPriority;
+
+        return $this->themesQueue;
+    }
+
+    /**
      * Give Theme To Queue From Conf.
      *
      * ! if not invokeWhen then just give default themes on bootstrap
@@ -209,7 +222,7 @@ class RenderDefaultStrategy
      */
     protected function giveThemes($invokeWhen)
     {
-        $queue = $this->themesQueue();
+        $queue = $this->_themesQueue();
 
         foreach ($this->_getConf('themes') as $name => $settings)
         {
@@ -372,20 +385,6 @@ class RenderDefaultStrategy
     }
 
     /**
-     * Get Content Type That Renderer Will Provide
-     * exp. application/json; text/html
-     *
-     * @return string
-     */
-    function getContentType()
-    {
-        return 'text/html; charset=UTF-8';
-    }
-
-
-    // ..
-
-    /**
      * Set Template For ViewModel With No Template-
      * From MatchedRoute
      *
@@ -451,13 +450,7 @@ class RenderDefaultStrategy
      */
     protected function _getConf($key = null, $_ = null)
     {
-        // retrieve and cache config
-        $services = $this->sc;
-
-        /** @var aSapi $config */
-        $config = $services->get('/sapi');
-        $config = $config->config();
-        $config = $config->{\Module\HttpRenderer\Module::class}->{self::CONF_KEY};
+        $config = $this->config;
 
         foreach (func_get_args() as $key) {
             if (! isset($config[$key]) )
@@ -467,5 +460,40 @@ class RenderDefaultStrategy
         }
 
         return $config;
+    }
+
+    /**
+     * Build Object With Provided Options
+     *
+     * @param array $options Associated Array
+     * @param bool $throwException Throw Exception On Wrong Option
+     *
+     * @return $this
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     */
+    function with(array $options, $throwException = false)
+    {
+        if (! $this->config)
+            $this->config = new StdArray;
+
+        $this->config = $this->config->withMergeRecursive(new StdArray($options));
+        return $this;
+    }
+
+
+    // Implement RequestAware:
+
+    /**
+     * Set Request
+     *
+     * @param iHttpRequest $request
+     *
+     * @return $this
+     */
+    function setRequest(iHttpRequest $request)
+    {
+        $this->httpRequest = $request;
+        return $this;
     }
 }

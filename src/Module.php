@@ -24,9 +24,6 @@ use Module\HttpRenderer\Services\RenderStrategies\PluginsOfRenderStrategy;
 
 
 /**
- * // TODO remove unnecessary assets from theme folder
- * // TODO define some sample pages + using json renderer hydration samples
- *
  * - Provide Render Strategies To Represent Dispatch Result.
  *   include html and json render strategy,
  *   html render strategy has become with extensible template engine mechanism.

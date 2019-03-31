@@ -9,14 +9,11 @@ return
     ServiceRenderStrategiesContainer::CONF => [
         'services' => [
             'router'  => RenderRouterStrategy::class,
-            'default' => RenderDefaultStrategy::class,
-            'json'    => RenderJsonStrategy::class,
         ],
     ],
 
     // View Renderer Options
-    // TODO add these abilities to JsonRenderer as Some Methods
-    RenderDefaultStrategy::CONF_KEY => [
+    RenderDefaultStrategy::class => [
         'themes' => [
             'default' => [
                 'dir' => __DIR__.'/../theme',
@@ -44,8 +41,7 @@ return
     ],
 
     // TODO put real samples
-    // TODO add these abilities to JsonRenderer as Some Methods
-    RenderJsonStrategy::CONF_KEY => [
+    RenderJsonStrategy::class => [
         'routes' => [
             '@cart' => [
                 \Module\Shopping\RenderStrategy\JsonRenderer\CartRenderer::class,

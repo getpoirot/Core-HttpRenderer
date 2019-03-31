@@ -5,6 +5,7 @@ use Poirot\Events\Interfaces\iEvent;
 
 use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 use Poirot\Router\Interfaces\iRouterStack;
+use Poirot\Std\aConfigurable;
 use Poirot\Std\Struct\DataEntity;
 
 // TODO seems almost not needed or atleast cause bad design problems
@@ -102,5 +103,20 @@ class RenderRouterStrategy
         if ( is_callable($strategy) )
             // Invoke Strategy With Current Result
             return $strategy($result);
+    }
+
+    /**
+     * Build Object With Provided Options
+     *
+     * @param array $options Associated Array
+     * @param bool $throwException Throw Exception On Wrong Option
+     *
+     * @return $this
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     */
+    function with(array $options, $throwException = false)
+    {
+        // TODO: Implement with() method.
     }
 }

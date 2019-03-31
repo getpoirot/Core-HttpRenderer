@@ -1,7 +1,6 @@
 <?php
 namespace Module\HttpRenderer\Services;
 
-use Poirot\Application\aSapi;
 use Poirot\Ioc\Container\BuildContainer;
 use Poirot\Ioc\Container\Service\aServiceContainer;
 
@@ -22,33 +21,12 @@ class ServiceRenderStrategiesContainer
      */
     function newService()
     {
-        $settings = $this->_getConf();
+        $settings = \Poirot\config(\Module\HttpRenderer\Module::class, self::CONF);
 
         $builder = new BuildContainer;
         $builder->with( $builder::parseWith($settings) );
 
         $plugins = new PluginsOfRenderStrategy($builder);
         return $plugins;
-    }
-
-
-    // ..
-
-    /**
-     * Get Config Values
-     *
-     * @return mixed|null
-     * @throws \Exception
-     */
-    protected function _getConf()
-    {
-        // retrieve and cache config
-        $services = $this->services();
-
-        /** @var aSapi $config */
-        $config = $services->get('/sapi');
-        $config = $config->config();
-        $config = $config->{\Module\HttpRenderer\Module::class}->{self::CONF};
-        return $config;
     }
 }
