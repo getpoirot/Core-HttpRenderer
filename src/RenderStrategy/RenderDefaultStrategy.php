@@ -1,20 +1,27 @@
 <?php
 namespace Module\HttpRenderer\RenderStrategy;
 
-use Module\HttpRenderer\RenderStrategy\DefaultStrategy\ListenerError;
+use Module\HttpFoundation\Events\Listener\ListenerDispatch;
+use Module\HttpFoundation\Events\Listener\ListenerDispatchResult;
+use Module\HttpRenderer\Exceptions\ResultNotRenderableError;
 use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 
 use Poirot\Events\Interfaces\iEvent;
 
-use Poirot\Http\HttpRequest;
+use Poirot\Http\HttpMessage\Request\Plugin\MethodType;
+use Poirot\Http\HttpMessage\Response\Plugin\Status;
+use Poirot\Http\HttpResponse;
 use Poirot\Http\Interfaces\iHttpRequest;
 use Poirot\Http\Interfaces\iHttpResponse;
-use Poirot\Http\Interfaces\Respec\iRequestAware;
 use Poirot\Ioc\instance;
+use Poirot\Loader\Interfaces\iLoader;
+use Poirot\Loader\LoaderAggregate;
 use Poirot\Loader\LoaderNamespaceStack;
 use Poirot\Router\Interfaces\iRouterStack;
 use Poirot\Router\RouterStack;
 
+use Poirot\Std\Environment\EnvServerDefault;
+use Poirot\Std\Environment\FactoryEnvironment;
 use Poirot\Std\Struct\CollectionPriority;
 use Poirot\Std\Type\StdArray;
 use Poirot\View\aViewModel;
@@ -27,9 +34,7 @@ use Poirot\View\ViewModelTemplate;
 
 class RenderDefaultStrategy
     extends aRenderStrategy
-    implements iRequestAware
 {
-    const CONF = 'view_renderer';
     const CONF_ROUTE_PARAMS = 'view_renderer';
 
     const PRIORITY_CREATE_VIEWMODEL_RESULT    = -10;
@@ -38,19 +43,58 @@ class RenderDefaultStrategy
     const PRIORITY_FINALIZE                   = -1000;
 
 
-    protected $themesQueue;
-
+    /** @var iHttpRequest */
+    protected $request;
+    /** @var iHttpResponse */
+    protected $response;
     /** @var iViewModelPermutation View script model */
     protected $scriptView;
     /** @var iViewModelPermutation */
     protected $templateView;
+    /** @var LoaderAggregate */
+    protected $viewResolver;
 
     protected $defaultLayout = 'default';
+    protected $config;
+    protected $themesQueue;
     protected $themes_loaded = [];
-    /** @var HttpRequest */
-    protected $httpRequest;
 
-    private $config;
+
+    /**
+     * Construct.
+     *
+     * @param iHttpRequest       $request      @IoC /httpRequest
+     * @param iHttpResponse|null $response     @IoC /httpResponse
+     * @param iViewModel|null    $scriptView   @IoC /ViewModel
+     * @param iLoader|null       $viewResolver @IoC /ViewModelResolver
+     */
+    function __construct(
+        iHttpRequest $request
+        , iHttpResponse $response = null
+        , iViewModel $scriptView = null
+        , iLoader $viewResolver = null
+    ) {
+        $this->setRequest($request);
+
+        if (null !== $response)
+            $this->setResponse($response);
+
+        if (null !== $scriptView)
+            $this->setScriptViewModel($scriptView);
+
+        if (null !== $viewResolver)
+            $this->setViewResolver($viewResolver);
+
+
+        $this->__init();
+    }
+
+    function __init()
+    {
+        $viewAsTemplate = clone $this->getScriptViewModel();
+        $viewAsTemplate->setFinal();
+        $this->templateView = $viewAsTemplate;
+    }
 
 
     /**
@@ -65,27 +109,29 @@ class RenderDefaultStrategy
      */
     function attachToEvent(iEvent $events)
     {
-        if ( $this->httpRequest->getMethod() == 'HEAD' )
-            // Response To HEAD request is not necessary!
+        if ( $this->shouldSkipRenderer() )
             return $this;
 
 
-        $self = $this;
         $events
             ## give themes and initialize
             ->on(
                 EventHeapOfSapi::EVENT_APP_BOOTSTRAP
-                , function () use ($self) {
-                    $self->giveThemes(false);
+                , function ()
+                {
+                    $this->_loadThemesIntoQueue(false);
                 }
                 , 1000
             )
             ## give themes and initialize
             ->on(
                 EventHeapOfSapi::EVENT_APP_DISPATCH
-                , function () use ($self) {
-                    $self->giveThemes(true);
-                    $self->_ensureThemes();
+                , function ()
+                {
+                    ## because we might need to access render from within the actions
+                    #
+                    $this->_loadThemesIntoQueue(true);
+                    $this->_ensureThemesAvailability();
                 }
                 , 1000
             )
@@ -93,24 +139,39 @@ class RenderDefaultStrategy
             ## create view model from string result
             ->on(
                 EventHeapOfSapi::EVENT_APP_RENDER
-                , function ($result = null, $route_match = null) use ($self) {
-                    return $self->createScriptViewModelFromResult($result, $route_match);
+                , function ($result = null, $route_match = null)
+                {
+                    if (! ($this->shouldSkipRenderer() || $this->isRenderable($result)) )
+                        return false;
+
+                    // change the "result" param value inside event
+                    return [
+                        ListenerDispatchResult::RESULT_DISPATCH => $this->_createScriptViewModelFromResult($result, $route_match)
+                    ];
                 }
                 , self::PRIORITY_CREATE_VIEWMODEL_RESULT
             )
             ## template decorator for view model
             ->on(
                 EventHeapOfSapi::EVENT_APP_RENDER
-                , function ($result = null, $route_match = null) use ($self) {
-                    return $self->injectToLayoutDecorator($result, $route_match);
+                , function ($result = null)
+                {
+                    if (! ($this->shouldSkipRenderer() || $this->isRenderable($result)) )
+                        return false;
+
+                    // change the "result" param value inside event
+                    return [
+                        ListenerDispatchResult::RESULT_DISPATCH =>  $this->_injectToLayoutDecorator($result)
+                    ];
                 }
                 , self::PRIORITY_DECORATE_VIEWMODEL_LAYOUT
             )
             ## ensure themes viewResolver
             ->on(
                 EventHeapOfSapi::EVENT_APP_RENDER
-                , function () use ($self) {
-                    $self->_ensureThemes();
+                , function ()
+                {
+                    $this->_ensureThemesAvailability();
                 }
                 , self::PRIORITY_DECORATE_VIEWMODEL_LAYOUT+1
             )
@@ -118,7 +179,19 @@ class RenderDefaultStrategy
             ## handle error pages
             ->on(
                 EventHeapOfSapi::EVENT_APP_ERROR
-                , new ListenerError($this, $this->themesQueue)
+                , function ($exception = null, $event = null)
+                {
+                    if ( $this->shouldSkipRenderer() )
+                        return false;
+
+                    # disable default throw exception listener at the end
+                    $event->collector()->setExceptionShouldThrow(false);
+
+                    // change the "result" param value inside event
+                    return [
+                        ListenerDispatch::RESULT_DISPATCH => $this->makeErrorResponse($exception),
+                    ];
+                }
                 , self::APP_ERROR_HANDLE_RENDERER_PRIORITY
             )
         ;
@@ -127,38 +200,240 @@ class RenderDefaultStrategy
     }
 
     /**
+     * Make Response From Given Result
+     *
+     * @param mixed $result
+     * @param iRouterStack $routeMatch
+     *
+     * @return iHttpResponse|iViewModel|string
+     * @throws ResultNotRenderableError
+     * @throws \Exception
+     */
+    function makeResponse($result, $routeMatch = null)
+    {
+        $viewModel = $this->_createScriptViewModelFromResult($result, $routeMatch);
+        $viewModel = $this->_injectToLayoutDecorator($viewModel);
+
+        return $viewModel;
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * - change layout to error templates
+     * - change result to include exception
+     * - let application render the result as data again
+     *
+     * @throws \Exception
+     */
+    function makeErrorResponse(\Exception $exception, $_ = null)
+    {
+        # View Script Model Template
+        #
+        if ( null === $errorTemplate = $this->_attainViewScriptTemplateOfError($exception) )
+            throw new \Exception(sprintf(
+                'Cant find error template for exception (%s).'
+                , get_class($exception)
+            ));
+
+
+        $scriptViewModel = clone $this->getScriptViewModel();
+        $scriptViewModel->setTemplate(is_string($errorTemplate) ? $errorTemplate : $errorTemplate[0]);
+
+
+        # Error Layout Template
+        #
+        $layoutViewModel = clone $this->getLayoutViewModel();
+        $layoutTemplate  = is_string($errorTemplate) ? $this->_attainLayoutTemplate($errorTemplate) : $errorTemplate[1];
+
+        if ($layoutTemplate)
+            $layoutViewModel->setTemplate($layoutTemplate);
+        else
+            ## just render view script and disable layout template
+            $scriptViewModel->setFinal();
+
+
+        // ...
+
+        $isAllowDisplayExceptions = (FactoryEnvironment::hasCurrentEnvironment()) ?: new EnvServerDefault;
+        $isAllowDisplayExceptions = $isAllowDisplayExceptions->getErrorReporting();
+
+
+        $scriptViewModel->setVariables([
+            'exception' => new \Exception(
+                'An error occurred during execution; please try again later.'
+                , null
+                , $exception
+            ),
+            'display_exceptions' => $isAllowDisplayExceptions
+        ]);
+
+
+        ##  bind current result view model as child delegate
+        ##- with parent when render while put result in $content
+        /** @var DecorateViewModel $layoutViewModel */
+        $layoutViewModel->bind( new DecorateViewModel(
+            $scriptViewModel
+            , null
+            , function($resultRender, $parent) {
+                /** @var $parent iViewModelPermutation */
+                $parent->variables()->set('content', (string) $resultRender);
+            }
+        ));
+
+
+        // TODO Response Aware Exception; map exception code to response code aware and more; include headers
+        //      Might be good to attach it to finish event
+        $exception_code = $exception->getCode();
+
+        /** @var iHttpResponse $response */
+        $response = $this->getResponse();
+        if (Status::_($response)->isSuccess()) {
+            if (! (is_numeric($exception_code)
+                && $exception_code > 100
+                && $exception_code <= 600
+            ))
+                $exception_code = 500;
+
+            $response->setStatusCode(($exception_code) ? $exception_code : 500);
+        }
+
+
+        return $layoutViewModel;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    function isRenderable($result)
+    {
+        $r = parent::isRenderable($result) ||
+            ( \Poirot\Std\isStringify($result) || $result instanceof iViewModel );
+
+        return $r;
+    }
+
+    /**
+     * Get Content Type That Renderer Will Provide
+     * exp. application/json; text/html
+     *
+     * @return string
+     */
+    function getContentType()
+    {
+        return 'text/html; charset=UTF-8';
+    }
+
+    /**
+     * Should this renderer skipped?
+     *
+     * @return bool
+     */
+    function shouldSkipRenderer()
+    {
+        // Response To HEAD request is not necessary!
+        return MethodType::_($this->request)->isHead();
+    }
+
+
+    // Implement configurable:
+
+    /**
+     * Build Object With Provided Options
+     *
+     * @param array $options Associated Array
+     * @param bool $throwException Throw Exception On Wrong Option
+     *
+     * @return $this
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     */
+    function with(array $options, $throwException = false)
+    {
+        if (! $this->config)
+            $this->config = new StdArray;
+
+        $this->config = $this->config->withMergeRecursive(new StdArray($options));
+        return $this;
+    }
+
+
+    // Options:
+
+    /**
+     * Set View Script Model
+     *
+     * @param iViewModel $viewModel
+     *
+     * @return $this
+     */
+    function setScriptViewModel(iViewModel $viewModel)
+    {
+        $this->scriptView = $viewModel;
+        return $this;
+    }
+
+    /**
      * Get View Script Model
      *
      * @return ViewModelTemplate|iViewModelPermutation
-     * @throws \Exception
      */
-    function viewModelOfScripts()
+    function getScriptViewModel()
     {
         if (! $this->scriptView )
-            $this->scriptView = $this->sc->fresh('/ViewModel');
+            $this->setScriptViewModel(new ViewModelTemplate);
 
         return $this->scriptView;
+    }
+
+    /**
+     * Set View Template Decorator Model
+     *
+     * @param iViewModel $viewModel
+     *
+     * @return $this
+     */
+    function setLayoutViewModel(iViewModel $viewModel)
+    {
+        $this->templateView = $viewModel;
+        return $this;
     }
 
     /**
      * Get View Template Decorator Model
      *
      * @return ViewModelTemplate|iViewModelPermutation
-     * @throws \Exception
      */
-    function viewModelOfLayouts()
+    function getLayoutViewModel()
     {
-        if (! $this->templateView ) {
-            $viewAsTemplate = $this->sc->fresh('/ViewModel');
-            $viewAsTemplate->setFinal();
-            $this->templateView = $viewAsTemplate;
-        }
-
         return $this->templateView;
     }
 
+    /**
+     * View Model Resolver
+     *
+     * @return LoaderAggregate
+     */
+    function getViewResolver()
+    {
+        if (! $this->viewResolver )
+            $this->setViewResolver(new LoaderNamespaceStack);
 
-    // Options:
+        return $this->viewResolver;
+    }
+
+    /**
+     * View Model Resolver
+     *
+     * @param iLoader $viewResolver
+     *
+     * @return $this
+     */
+    function setViewResolver(iLoader $viewResolver)
+    {
+        $this->viewResolver = $viewResolver;
+        return $this;
+    }
 
     /**
      * Set Default Template Name
@@ -186,31 +461,56 @@ class RenderDefaultStrategy
     }
 
     /**
-     * Get Content Type That Renderer Will Provide
-     * exp. application/json; text/html
+     * Set Request Object
      *
-     * @return string
+     * @param iHttpRequest $request
+     *
+     * @return $this
      */
-    function getContentType()
+    function setRequest(iHttpRequest $request)
     {
-        return 'text/html; charset=UTF-8';
+        $this->request = $request;
+        return $this;
+    }
+
+    /**
+     * Get Request Object
+     *
+     * @return iHttpRequest
+     */
+    function getRequest()
+    {
+        return $this->request;
+    }
+
+    /**
+     * Set Response
+     *
+     * @param iHttpResponse $response
+     *
+     * @return $this
+     */
+    function setResponse(iHttpResponse $response)
+    {
+        $this->response = $response;
+        return $this;
+    }
+
+    /**
+     * Get Response Object
+     *
+     * @return iHttpResponse
+     */
+    function getResponse()
+    {
+        if (null === $this->response)
+            $this->setResponse(new HttpResponse);
+
+        return $this->response;
     }
 
 
     // ..
-
-    /**
-     * Give Matched Themes Queue
-     *
-     * @return CollectionPriority
-     */
-    protected function _themesQueue()
-    {
-        if (! $this->themesQueue )
-            $this->themesQueue = new CollectionPriority;
-
-        return $this->themesQueue;
-    }
 
     /**
      * Give Theme To Queue From Conf.
@@ -220,13 +520,13 @@ class RenderDefaultStrategy
      * @param boolean $invokeWhen
      * @throws \Exception
      */
-    protected function giveThemes($invokeWhen)
+    protected function _loadThemesIntoQueue($invokeWhen)
     {
-        $queue = $this->_themesQueue();
+        $queue  = $this->_getThemesQueue();
+        $config = $this->_getConf('themes');
 
-        foreach ($this->_getConf('themes') as $name => $settings)
+        foreach ($config as $name => $settings)
         {
-
             if ( in_array($name, $this->themes_loaded) )
                 continue;
 
@@ -255,9 +555,9 @@ class RenderDefaultStrategy
         }
     }
 
-    protected function _ensureThemes()
+    protected function _ensureThemesAvailability()
     {
-        $viewModelResolver = $this->sc->get('/viewModelResolver');
+        $viewModelResolver = $this->getViewResolver();
 
         foreach (clone $this->themesQueue as $theme) {
             ## ViewScripts To View Resolver:
@@ -273,37 +573,28 @@ class RenderDefaultStrategy
     /**
      * Create ViewModel From Actions Result
      *
-     * priority -10
-     *
-     * @param mixed $result Result from dispatch action
+     * @param string|iViewModel|\Traversable $result Result from dispatch action
      * @param iRouterStack $route_match
      *
-     * @return array|void
+     * @return iViewModel|null
      * @throws \Exception
      */
-    protected function createScriptViewModelFromResult($result = null, $route_match = null)
+    protected function _createScriptViewModelFromResult($result = null, $route_match = null)
     {
-        if ($result instanceof iHttpResponse)
-            // Response Prepared; So Do Nothing.
-            return;
-
-
-
         ## Create View Model From Result
         #
         $viewModel = $result;
-        if (! $viewModel instanceof iViewModel)
-        {
+        if (! $viewModel instanceof iViewModel) {
             if (\Poirot\Std\isStringify($result)) {
                 ## null, string, objects with __toString
-                $viewModel = new ViewModelStatic();
+                $viewModel = new ViewModelStatic;
                 $viewModel->setContent($result);
 
             } elseif (
                 is_array($result)
                 || $result instanceof \Traversable
             ) {
-                $viewModel = $this->viewModelOfScripts();
+                $viewModel = clone $this->getScriptViewModel();
                 $viewModel->setVariables($result);
             }
         }
@@ -317,8 +608,10 @@ class RenderDefaultStrategy
 
         ## prepare layout and template
         #
-        $viewModel = $this->_preScriptViewModelTemplate($viewModel, $route_match);
-        return ['result' => $viewModel];
+        if ($route_match)
+            $viewModel = $this->_preScriptViewModelTemplate($viewModel, $route_match);
+
+        return $viewModel;
     }
 
     /**
@@ -332,21 +625,20 @@ class RenderDefaultStrategy
      * - replace decorator as new result
      *
      * @param mixed $result Result from dispatch action
-     * @param RouterStack $route_match
      *
-     * @return array|null
+     * @return DecorateViewModel|iViewModel
      * @throws \Exception
      */
-    protected function injectToLayoutDecorator($result = null, $route_match = null)
+    protected function _injectToLayoutDecorator($result)
     {
-        $viewModel = $result;
-        if (! $viewModel instanceof iViewModel )
-            return;
+        if (! $result instanceof iViewModel )
+            return $result;
 
+
+        $viewModel = $result;
         if ( $viewModel->isFinal() )
             ## no layout decorator; in case of action return viewModel instance directly.
-            return;
-
+            return $viewModel;
 
 
         // ...
@@ -356,13 +648,10 @@ class RenderDefaultStrategy
         foreach (clone $this->themesQueue as $theme)
         {
             /** @var DecorateViewModel $viewAsTemplate */
-            $viewAsTemplate = $this->viewModelOfLayouts();
+            $viewAsTemplate = clone $this->getLayoutViewModel();
 
             ## default layout if template view has no template
-            $layout = ( $viewAsTemplate->getTemplate() )
-                ? $viewAsTemplate->getTemplate()
-                : $theme->layout['default']
-            ;
+            $layout = ( $viewAsTemplate->getTemplate() ) ?: $theme->layout['default'];
 
             $viewAsTemplate->setTemplate($layout);
             ##  bind current result view model as child delegate
@@ -371,9 +660,9 @@ class RenderDefaultStrategy
                 $viewModel
                 , null
                 , function($resultRender, $parent) {
-                /** @var $parent iViewModelPermutation */
-                $parent->variables()->set('content', (string) $resultRender);
-            }
+                    /** @var $parent iViewModelPermutation */
+                    $parent->variables()->set('content', (string) $resultRender);
+                }
             ));
 
             if ( $viewAsTemplate->isFinal() )
@@ -381,7 +670,7 @@ class RenderDefaultStrategy
         }
 
 
-        return ['result' => $viewAsTemplate];
+        return $viewAsTemplate;
     }
 
     /**
@@ -401,7 +690,7 @@ class RenderDefaultStrategy
      *
      * @return iViewModel|ViewModelTemplate
      */
-    private function _preScriptViewModelTemplate(iViewModel $result = null, $route_match = null)
+    protected function _preScriptViewModelTemplate(iViewModel $result = null, $route_match = null)
     {
         $viewScriptModel = $result;
         $routeParams     = ($route_match) ? $route_match->params()->get(self::CONF_ROUTE_PARAMS) : null;
@@ -409,8 +698,9 @@ class RenderDefaultStrategy
 
         ## Achieve Template Name From Matched Route:
         #
-        if ( $route_match && ($viewScriptModel instanceof ViewModelTemplate || $viewScriptModel instanceof DecorateViewModel) )
-        {
+        if ( $route_match &&
+            ($viewScriptModel instanceof ViewModelTemplate || $viewScriptModel instanceof DecorateViewModel)
+        ) {
             $routeName = $route_match->getName();
             $template  = (isset($routeParams['template'])) ? $routeParams['template'] : $viewScriptModel->getTemplate();
             if ( $template && (false === strpos($template, RouterStack::SEPARATOR)) )
@@ -426,16 +716,71 @@ class RenderDefaultStrategy
 
         ## Final Template Settings:
         #
-        if ($route_match && $viewScriptModel instanceof aViewModel)
-        {
+        if ($route_match && $viewScriptModel instanceof aViewModel) {
             (! isset($routeParams['final']) ) ?: $viewScriptModel->setFinal($routeParams['final']);
         }
-
-
 
         return $viewScriptModel;
     }
 
+    protected function _attainViewScriptTemplateOfError($exception)
+    {
+        $exceptionTemplate = null;
+        foreach (clone $this->_getThemesQueue() as $theme)
+        {
+            $templates = @$theme->layout['exception'];
+            $exClass = get_class($exception);
+            while($exClass) {
+                if (isset($templates[$exClass])) {
+                    $exceptionTemplate = $templates[$exClass];
+                    break;
+                }
+
+                $exClass = get_parent_class($exClass);
+            }
+
+            if ( isset($exceptionTemplate) )
+                break;
+        }
+
+        return $exceptionTemplate;
+    }
+
+    protected function _attainLayoutTemplate($errTemplate)
+    {
+        if (!is_string($errTemplate) && isset($errTemplate[1]) )
+            // '\Exception' => ['error/error', 'blank'],
+            return $errTemplate[1];
+
+
+        $exceptionTemplate = null;
+        foreach (clone $this->_getThemesQueue() as $theme)
+        {
+            $templates = @$theme->layout;
+            if ( isset($templates['default']) )
+                // here (blank) is defined as default layout for all error pages
+                // 'layout' => [
+                //   'default' => 'blank',
+                //   ...
+                $exceptionTemplate = $templates['default'];
+            break;
+        }
+
+        return $exceptionTemplate;
+    }
+
+    /**
+     * Give Matched Themes Queue
+     *
+     * @return CollectionPriority
+     */
+    protected function _getThemesQueue()
+    {
+        if (! $this->themesQueue )
+            $this->themesQueue = new CollectionPriority;
+
+        return $this->themesQueue;
+    }
 
     /**
      * Get Config Values
@@ -460,40 +805,5 @@ class RenderDefaultStrategy
         }
 
         return $config;
-    }
-
-    /**
-     * Build Object With Provided Options
-     *
-     * @param array $options Associated Array
-     * @param bool $throwException Throw Exception On Wrong Option
-     *
-     * @return $this
-     * @throws \Exception
-     * @throws \InvalidArgumentException
-     */
-    function with(array $options, $throwException = false)
-    {
-        if (! $this->config)
-            $this->config = new StdArray;
-
-        $this->config = $this->config->withMergeRecursive(new StdArray($options));
-        return $this;
-    }
-
-
-    // Implement RequestAware:
-
-    /**
-     * Set Request
-     *
-     * @param iHttpRequest $request
-     *
-     * @return $this
-     */
-    function setRequest(iHttpRequest $request)
-    {
-        $this->httpRequest = $request;
-        return $this;
     }
 }

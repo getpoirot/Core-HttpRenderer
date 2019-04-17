@@ -1,11 +1,15 @@
 <?php
 namespace Module\HttpRenderer\RenderStrategy;
 
+use Module\HttpFoundation\Events\Listener\ListenerDispatchResult;
+use Module\HttpRenderer\Exceptions\ResultNotRenderableError;
+use function Poirot\Http\Header\renderHeaderValue;
+
+use Poirot\Http\HttpResponse;
+use Poirot\Std\Environment\FactoryEnvironment;
 use Poirot\Std\Type\StdArray;
-use ReflectionClass;
+use Poirot\View\Interfaces\iViewModel;
 use Module\HttpFoundation\Events\Listener\ListenerDispatch;
-use Poirot\Application\aSapi;
-use Poirot\Application\Sapi\Event\EventError;
 use Poirot\Events\Interfaces\iEvent;
 
 use Poirot\Http\Header\FactoryHttpHeader;
@@ -13,7 +17,6 @@ use Poirot\Http\HttpMessage\Response\Plugin\Status;
 
 use Poirot\Http\Interfaces\iHttpRequest;
 use Poirot\Http\Interfaces\iHttpResponse;
-use Poirot\Ioc\Container;
 
 use Poirot\Application\Sapi\Event\EventHeapOfSapi;
 use Poirot\Ioc\instance;
@@ -23,36 +26,30 @@ use Poirot\Std\Struct\aDataAbstract;
 use Poirot\Std\Type\StdTravers;
 
 
-/**
- * // TODO somehow i think we can polish this renderer
- *
- * @see doAttachDefaultEvents::_attachDefaultEvents
- */
 class RenderJsonStrategy
     extends aRenderStrategy
 {
-    const CONF = 'json_renderer';
-
-    /** @var Container */
-    protected $sc;
+    /** @var iHttpRequest */
     protected $request;
-
-    protected $canHandle;
-    private $config;
+    /** @var iHttpResponse */
+    protected $response;
+    protected $config;
 
 
     /**
-     * Constructor
+     * Construct.
      *
-     * @param iHttpRequest $httpRequest @IoC /HttpRequest
+     * @param iHttpRequest       $request  @IoC /httpRequest
+     * @param iHttpResponse|null $response @IoC /httpResponse
      */
-    function __construct(iHttpRequest $httpRequest)
+    function __construct(iHttpRequest $request, iHttpResponse $response = null)
     {
-        $this->request = $httpRequest;
+        $this->setRequest($request);
+
+        if (null !== $response)
+            $this->setResponse($response);
     }
 
-
-    // Implement Setter/Getter
 
     /**
      * Initialize To Events
@@ -66,19 +63,36 @@ class RenderJsonStrategy
      */
     function attachToEvent(iEvent $events)
     {
-        $self = $this;
         $events
             ->on(
                 EventHeapOfSapi::EVENT_APP_RENDER
-                , function ($result = null, $sapi = null, $route_match = null) use ($self) {
-                    return $self->createResponseFromResult($result, $sapi, $route_match);
+                , function ($result = null, $route_match = null)
+                {
+                    if ( $this->shouldSkipRenderer() || !$this->isRenderable($result) )
+                        return false;
+
+                    // change the "result" param value inside event
+                    return [
+                        ListenerDispatchResult::RESULT_DISPATCH => $this->makeResponse($result, $route_match)
+                    ];
                 }
                 , 100
             )
             ->on(
                 EventHeapOfSapi::EVENT_APP_ERROR
-                , function ($exception = null, $e = null, $sapi = null) use ($self) {
-                    return $self->handleErrorRender($exception, $e, $sapi);
+                , function ($exception = null, $e = null) use ($events)
+                {
+                    if ( $this->shouldSkipRenderer() )
+                        return false;
+
+                    # disable default throw exception listener at the end
+                    $e->collector()->setExceptionShouldThrow(false);
+                    $e->stopPropagation();
+
+                    // change the "result" param value inside event
+                    return [
+                        ListenerDispatch::RESULT_DISPATCH => $this->makeErrorResponse($exception),
+                    ];
                 }
                 , self::APP_ERROR_HANDLE_RENDERER_PRIORITY + 100
             )
@@ -88,28 +102,21 @@ class RenderJsonStrategy
     }
 
     /**
-     * Create ViewModel From Actions Result
+     * Make Response From Given Result
      *
-     * priority -10
+     * @param mixed        $result
+     * @param iRouterStack $routeMatch
      *
-     * @param mixed $result Result from dispatch action
-     * @param aSapi $sapi
-     *
-     * @return array|null
+     * @return iHttpResponse|iViewModel|string
      * @throws \Exception
      */
-    protected function createResponseFromResult($result = null, $sapi = null, $route_match = null)
+    function makeResponse($result, $routeMatch = null)
     {
-        if (! $this->canHandle() )
-            return null;
-
-        if ( $result instanceof iHttpResponse )
-            // Response Prepared; Do Nothing.
-            return null;
-
-        if (! (is_array($result) || $result instanceof \Traversable) )
-            // Result Can`t Handle With Json Renderer!
-            return null;
+        if (! $this->isRenderable($result) )
+            throw new ResultNotRenderableError(sprintf(
+                'Result (%s) is not renderable by Render Strategy.'
+                    , (is_object($result)) ? get_class($result) : gettype($result)
+            ));
 
 
         ## Handle Result Registered Hydration
@@ -121,14 +128,11 @@ class RenderJsonStrategy
             $result = StdTravers::of($result)->toArray(null, true);
 
 
-        $result = $this->_handleResultHydration($result, $route_match);
-
-
-
         ## Build Response
         #
-        if ( $result instanceof \Traversable )
-            $result = StdTravers::of($result)->toArray(null, true);
+        if ($routeMatch)
+            // Handle Result Hydration
+            $result = $this->_handleResultHydration($result, $routeMatch);
 
 
         $result = [
@@ -137,75 +141,69 @@ class RenderJsonStrategy
         ];
 
         $content  = json_encode($result);
-        $response = $sapi->services()->get('HttpResponse');
-        $response->headers()->insert(
-            FactoryHttpHeader::of(array('Content-Type' => 'application/json')) );
-        $response->setBody($content);
 
-        return array(ListenerDispatch::RESULT_DISPATCH => $response);
+        $response = $this->getResponse();
+        $response->headers()
+            ->insert( FactoryHttpHeader::of(['Content-Type' => 'application/json']) )
+        ;
+
+        $response->setBody($content);
+        return $response;
     }
 
-
     /**
-     * note: the result param from this will then pass
-     *       to render event by sapi application
-     * @see self::createResponseFromResult()
-     *
-     * @param \Exception $exception
-     * @param EventError $event
-     * @param aSapi $sapi
-     *
-     * @return array
-     * @throws \ReflectionException
+     * @inheritdoc
      */
-    protected function handleErrorRender($exception = null, $event = null, $sapi = null)
+    function makeErrorResponse(\Exception $exception, $_ = null)
     {
-        if (! $this->canHandle() )
-            // Do Nothing;
-            return null;
-
-        if (! $exception instanceof \Exception )
-            ## unknown error
-            return;
-
-
         // TODO Response Aware Exception; map exception code to response code aware and more; include headers
+        //      Might be good to attach it to finish event
         $exception_code = $exception->getCode();
 
-        $exRef = new ReflectionClass($exception);
-        $result = array(
+        try {
+            $exRef = new \ReflectionClass($exception);
+            $errorName = $exRef->getShortName();
+        } catch (\Exception $e) {
+            $errorName = get_class($exception);
+        }
+
+
+        $result = [
             'status' => 'ERROR',
-            'error'  => array(
-                'state'   => $exRef->getShortName(),
+            'error'  => [
+                'state'   => $errorName,
                 'code'    => $exception_code,
                 'message' => $exception->getMessage(),
-            ),
-        );
+            ],
+        ];
 
-        $isAllowDisplayExceptions = new EnvServerDefault();
+
+        if ( $isAllowDisplayExceptions = FactoryEnvironment::hasCurrentEnvironment() )
+            $isAllowDisplayExceptions = new EnvServerDefault;
+
         $isAllowDisplayExceptions = $isAllowDisplayExceptions->getErrorReporting();
         if ($isAllowDisplayExceptions) {
             do {
-                $result = array_merge_recursive($result, array(
-                    'error' => array(
-                        '_debug_' => array(
-                            'exception' => array(
-                                array(
+                $result = array_merge_recursive($result, [
+                    'error' => [
+                        '_debug_' => [
+                            'exception' => [
+                                [
                                     'message' => $exception->getMessage(),
                                     'class'   => get_class($exception),
                                     'file'    => $exception->getFile(),
                                     'line'    => $exception->getLine(),
-                                ),
-                            ),
-                        ),
-                    ),
-                ));
+                                ],
+                            ],
+                        ],
+                    ],
+                ]);
             } while ($exception = $exception->getPrevious());
         }
 
         $content  = json_encode($result);
         /** @var iHttpResponse $response */
-        $response = $sapi->services()->get('HttpResponse');
+        $response = $this->getResponse();
         if (Status::_($response)->isSuccess()) {
             if (! (is_numeric($exception_code)
                 && $exception_code > 100
@@ -220,43 +218,106 @@ class RenderJsonStrategy
         );
         $response->setBody($content);
 
-        return [
-            ListenerDispatch::RESULT_DISPATCH => $response,
-
-            # disable default throw exception listener at the end
-            'exception' => null, // Grab Exception and not pass to other handlers
-        ];
+        return $response;
     }
 
     /**
-     * Get Content Type That Renderer Will Provide
-     * exp. application/json; text/html
-     *
-     * @return string
+     * @inheritdoc
      */
     function getContentType()
     {
         return 'application/json';
     }
 
+    /**
+     * Should this renderer skipped?
+     *
+     * @return bool
+     */
+    function shouldSkipRenderer()
+    {
+        // Check What is Accept Request Header by Client
+        //
+        $r = true;
+        if ( $this->getRequest()->headers()->has('Accept') ) {
+            $values = renderHeaderValue($this->getRequest(), 'Accept');
+            if (strtolower($values) === 'application/json')
+                // Accept application/json given by http client
+                $r = false;
+        }
+
+        return $r;
+    }
+
+
+    // Implement configurable:
+
+    /**
+     * @inheritdoc
+     */
+    function with(array $options, $throwException = false)
+    {
+        if (! $this->config)
+            $this->config = new StdArray;
+
+        $this->config = $this->config->withMergeRecursive(new StdArray($options));
+        return $this;
+    }
+
+
+    // Options:
+
+    /**
+     * Set Request Object
+     *
+     * @param iHttpRequest $request
+     *
+     * @return $this
+     */
+    function setRequest(iHttpRequest $request)
+    {
+        $this->request = $request;
+        return $this;
+    }
+
+    /**
+     * Get Request Object
+     *
+     * @return iHttpRequest
+     */
+    function getRequest()
+    {
+        return $this->request;
+    }
+
+    /**
+     * Set Response
+     *
+     * @param iHttpResponse $response
+     *
+     * @return $this
+     */
+    function setResponse(iHttpResponse $response)
+    {
+        $this->response = $response;
+        return $this;
+    }
+
+    /**
+     * Get Response Object
+     *
+     * @return iHttpResponse
+     */
+    function getResponse()
+    {
+        if (null === $this->response)
+            $this->setResponse(new HttpResponse);
+
+        return $this->response;
+    }
+
 
     // ..
-
-    private function canHandle()
-    {
-        if ($this->canHandle !== null)
-            return $this->canHandle;
-
-
-        if ( $this->request->headers()->has('Accept') ) {
-            $acceptHeader = $this->request->headers()->get('Accept');
-            foreach ($acceptHeader as $h) {
-                $values = $h->renderValueLine();
-                if (strtolower($values) === 'application/json')
-                    return $this->canHandle = true;
-            }
-        }
-    }
 
     /**
      * Handle Hydrate Chain Of Result
@@ -268,18 +329,16 @@ class RenderJsonStrategy
      * @return array|\Traversable
      * @throws \Exception
      */
-    private function _handleResultHydration($result, $routeMatch)
+    private function _handleResultHydration($result, iRouterStack $routeMatch)
     {
         ## Get Hydrator if has registered
         #
-        $routeName = ($routeMatch) ? $routeMatch->getName() : null;
-
+        $routeName = $routeMatch->getName();
 
 
         ## Merge Hydration Renderer
         #
         $r = null;
-
         foreach ( $this->_yieldRenderConf($routeName) as  $confHydration )
         {
             if ($r === null)
@@ -320,7 +379,49 @@ class RenderJsonStrategy
         return ($r === null) ? $result : $r;
     }
 
-    function mergeRecursive(array $a, array $b)
+    /**
+     * Get Config Values
+     *
+     * Argument can passed and map to config if exists [$key][$_][$__] ..
+     *
+     * @param $key
+     * @param null $_
+     *
+     * @return mixed|null
+     * @throws \Exception
+     */
+    private function _getConf($key = null, $_ = null)
+    {
+        $config = $this->config;
+
+        foreach (func_get_args() as $key) {
+            if (! isset($config[$key]) )
+                return null;
+
+            $config = $config[$key];
+        }
+
+        return $config;
+    }
+
+    private function _yieldRenderConf($routeName)
+    {
+        if ( $confHydration = $this->_getConf('routes', $routeName) )
+            yield $confHydration;
+
+        // looking for aliases hydration
+        if ( $confAliases = $this->_getConf('aliases') )
+        {
+            foreach ($confAliases as $routeAlias => $routes) {
+                if ( in_array($routeName, $routes) )
+                    yield $this->_getConf('routes', $routeAlias);
+            }
+        }
+
+        return null;
+    }
+
+    private function mergeRecursive(array $a, array $b)
     {
         foreach ($b as $key => $value)
         {
@@ -347,69 +448,5 @@ class RenderJsonStrategy
         }
 
         return $a;
-    }
-
-
-    private function _yieldRenderConf($routeName)
-    {
-        if ( $confHydration = $this->_getConf('routes', $routeName) )
-            yield $confHydration;
-
-
-        // looking for aliases hydration
-        if ( $confAliases = $this->_getConf('aliases') )
-        {
-            foreach ($confAliases as $routeAlias => $routes) {
-                if ( in_array($routeName, $routes) )
-                    yield $this->_getConf('routes', $routeAlias);
-            }
-        }
-
-
-        return null;
-    }
-
-    /**
-     * Get Config Values
-     *
-     * Argument can passed and map to config if exists [$key][$_][$__] ..
-     *
-     * @param $key
-     * @param null $_
-     *
-     * @return mixed|null
-     * @throws \Exception
-     */
-    protected function _getConf($key = null, $_ = null)
-    {
-        $config = $this->config;
-
-        foreach (func_get_args() as $key) {
-            if (! isset($config[$key]) )
-                return null;
-
-            $config = $config[$key];
-        }
-
-        return $config;
-    }
-
-    /**
-     * Build Object With Provided Options
-     *
-     * @param array $options Associated Array
-     * @param bool $throwException Throw Exception On Wrong Option
-     *
-     * @return $this
-     * @throws \Exception
-     * @throws \InvalidArgumentException
-     */
-    function with(array $options, $throwException = false)
-    {
-        if (! $this->config)
-            $this->config = new StdArray;
-
-        $this->config = $this->config->withMergeRecursive(new StdArray($options));
-        return $this;
     }
 }

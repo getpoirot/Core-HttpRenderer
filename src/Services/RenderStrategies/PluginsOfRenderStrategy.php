@@ -1,6 +1,7 @@
 <?php
 namespace Module\HttpRenderer\Services\RenderStrategies;
 
+use Module\HttpRenderer\Interfaces\iRenderStrategy;
 use Poirot\Events\Interfaces\iCorrelatedEvent;
 use Poirot\Events\Interfaces\iEvent;
 use Poirot\Ioc\Container\aContainerCapped;
@@ -36,7 +37,8 @@ class PluginsOfRenderStrategy
      */
     function __construct(BuildContainer $cBuilder = null)
     {
-        $this->_attachDefaults();
+        // Keep Lines Priority, It`s Mandatory
+        $this->_setDefaultContainerServices();
 
         parent::__construct($cBuilder);
     }
@@ -54,7 +56,7 @@ class PluginsOfRenderStrategy
         if (! is_object($pluginInstance) )
             throw new \Exception(sprintf('Can`t resolve to (%s) Instance.', $pluginInstance));
 
-        if (! $pluginInstance instanceof aRenderStrategy )
+        if (! $pluginInstance instanceof iRenderStrategy )
             throw new exContainerInvalidServiceType('Invalid Plugin Of Renderer Strategy Provided.');
     }
 
@@ -74,7 +76,7 @@ class PluginsOfRenderStrategy
     // Implement iCorrelatedEvent
 
     /**
-     * Attach To Event
+     * Attach Registered Renderer To (Sapi) Event Heap
      *
      * @param iEvent $event
      *
@@ -93,7 +95,12 @@ class PluginsOfRenderStrategy
 
     // ..
 
-    protected function _attachDefaults()
+    /**
+     * Set Default Plugins into Container
+     *
+     * @throws \Exception
+     */
+    protected function _setDefaultContainerServices()
     {
         ## Default Services
         #
@@ -114,6 +121,13 @@ class PluginsOfRenderStrategy
             });
     }
 
+    /**
+     * Build renderer with merged configs that are available
+     *
+     * @param aRenderStrategy $service
+     *
+     * @throws \Exception
+     */
     protected function _injectSettingsFromMergedConfig($service)
     {
         if (!($service instanceof RenderDefaultStrategy
