@@ -8,6 +8,6 @@ return [
     ],
     'services' => [
         'RenderStrategies' => ServiceRenderStrategiesContainer::class,
+        'ThemeManager'     => \Module\HttpRenderer\RenderStrategy\DefaultStrategy\ThemeManager::class,
     ],
 ];
-

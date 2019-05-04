@@ -20,11 +20,7 @@ class PluginsOfRenderStrategy
     implements iCorrelatedEvent
 {
     const VIEW      = 'view';
-    const VIEW_CONF = 'view_renderer';
-
     const JSON      = 'json';
-    const JSON_CONF = 'json_renderer';
-
 
     protected $_map_resolver_options = [
         self::VIEW => RenderDefaultStrategy::class,
@@ -130,9 +126,7 @@ class PluginsOfRenderStrategy
      */
     protected function _injectSettingsFromMergedConfig($service)
     {
-        if (!($service instanceof RenderDefaultStrategy
-            || $service instanceof RenderJsonStrategy)
-        )
+        if (! $service instanceof RenderJsonStrategy )
             // Nothing to do with other service instances
             return;
 

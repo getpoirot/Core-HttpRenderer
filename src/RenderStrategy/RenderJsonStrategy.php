@@ -7,6 +7,8 @@ use function Poirot\Http\Header\renderHeaderValue;
 
 use Poirot\Http\HttpResponse;
 use Poirot\Std\Environment\FactoryEnvironment;
+use Poirot\Std\Interfaces\Pact\ipConfigurable;
+use Poirot\Std\Traits\tConfigurable;
 use Poirot\Std\Type\StdArray;
 use Poirot\View\Interfaces\iViewModel;
 use Module\HttpFoundation\Events\Listener\ListenerDispatch;
@@ -28,7 +30,11 @@ use Poirot\Std\Type\StdTravers;
 
 class RenderJsonStrategy
     extends aRenderStrategy
+    implements ipConfigurable
 {
+    use tConfigurable;
+
+
     /** @var iHttpRequest */
     protected $request;
     /** @var iHttpResponse */

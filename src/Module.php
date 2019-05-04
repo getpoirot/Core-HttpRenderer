@@ -49,9 +49,6 @@ class Module implements iSapiModule
     , Sapi\Module\Feature\iFeatureModuleInitSapiEvents
     , Sapi\Module\Feature\iFeatureOnPostLoadModulesGrabServices
 {
-    const CONF = 'module.http-renderer';
-
-
     /**
      * @inheritdoc
      */
@@ -123,9 +120,9 @@ class Module implements iSapiModule
     /**
      * @inheritdoc
      *
-     * @param LoaderAggregate $viewModelResolver
-     * @param iRouterStack    $router
-     * @param PathAction      $path              @IoC /module/foundation/services/Path
+     * @param LoaderAggregate         $viewModelResolver
+     * @param iRouterStack            $router
+     * @param PathAction              $path              @IoC /module/foundation/services/Path
      *
      * @throws \Exception
      */
@@ -147,6 +144,7 @@ class Module implements iSapiModule
             'main/'    => __DIR__. '/../view/main/',
             'partial/' => __DIR__.'/../view/partial',
             'error/'   => __DIR__.'/../view/error',
+            '**'       => __DIR__.'/../view/'
         ]);
 
         ## Register Paths and Variables:
@@ -155,7 +153,7 @@ class Module implements iSapiModule
         {
             // According to route name 'www-theme' to serve statics files
             // @see cor-http_renderer.routes
-            $path->setPath('www-theme', "\$baseUrl/p/theme/");
+            $path->setPath('www-theme', "\$baseUrl/assets/www/");
         }
     }
 
