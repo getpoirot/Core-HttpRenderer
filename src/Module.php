@@ -113,7 +113,9 @@ class Module implements iSapiModule
 
         // Attach Renderer To Application Events; Lets Strategies Rules ...
         /** @var PluginsOfRenderStrategy $renderStrategies */
-        $renderStrategies = $services->get('/module/httpRenderer/services/RenderStrategies');
+        $renderStrategies = $services->from('/module/httpRenderer/services')
+            ->get(PluginsOfRenderStrategy::class);
+
         $renderStrategies->attachToEvent($events);
     }
 
