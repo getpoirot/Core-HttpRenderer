@@ -63,6 +63,9 @@ class RenderRouterStrategy
             EventHeapOfSapi::EVENT_APP_RENDER
             , function ($result = null, $route_match = null, $e = null)
             {
+                if (! $route_match )
+                    return false;
+
                 if (! $this->getMatchedRoute() )
                     $this->setMatchedRoute($route_match);
 
@@ -83,6 +86,9 @@ class RenderRouterStrategy
             EventHeapOfSapi::EVENT_APP_ERROR
             , function ($exception = null, $e = null, $route_match = null) use ($events)
             {
+                if (! $route_match )
+                    return false;
+
                 if (! $this->getMatchedRoute() )
                     $this->setMatchedRoute($route_match);
 

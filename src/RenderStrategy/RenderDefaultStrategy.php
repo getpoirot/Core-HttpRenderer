@@ -1,6 +1,7 @@
 <?php
 namespace Module\HttpRenderer\RenderStrategy;
 
+use Module\Foundation\View\ViewModelResolver;
 use Module\HttpFoundation\Events\Listener\ListenerDispatch;
 use Module\HttpFoundation\Events\Listener\ListenerDispatchResult;
 use Module\HttpRenderer\Exceptions\ResultNotRenderableError;
@@ -54,12 +55,12 @@ class RenderDefaultStrategy
      *
      * @param iHttpRequest       $request      @IoC /httpRequest
      * @param iViewModel|null    $viewModel    @IoC /ViewModel
-     * @param iLoader|null       $viewResolver @IoC /ViewModelResolver
+     * @param ViewModelResolver  $viewResolver @IoC /ViewModelResolver
      */
     function __construct(
         iHttpRequest $request
         , iViewModel $viewModel = null
-        , iLoader $viewResolver = null
+        , ViewModelResolver $viewResolver = null
     ) {
         $this->setRequest($request);
 
@@ -228,7 +229,6 @@ class RenderDefaultStrategy
         /** @var DecorateViewModel $layoutViewModel */
         $layoutViewModel->bind( new DecorateViewModel(
             $scriptViewModel
-            , null
             , function($resultRender, $parent) {
                 /** @var $parent iViewModelPermutation */
                 $parent->variables()->set('content', (string) $resultRender);
@@ -480,7 +480,6 @@ class RenderDefaultStrategy
         ##- with parent when render while put result in $content
         $viewAsTemplate->bind( new DecorateViewModel(
             $viewModel
-            , null
             , function($resultRender, $parent) {
                 /** @var $parent iViewModelPermutation */
                 $parent->variables()->set('content', (string) $resultRender);
