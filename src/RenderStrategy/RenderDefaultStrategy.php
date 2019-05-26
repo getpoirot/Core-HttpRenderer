@@ -227,15 +227,14 @@ class RenderDefaultStrategy
         ##  bind current result view model as child delegate
         ##- with parent when render while put result in $content
         /** @var DecorateViewModel $layoutViewModel */
-        $layoutViewModel->bind( new DecorateViewModel(
-            $scriptViewModel
-            , function($resultRender, $parent) {
-                /** @var $parent iViewModelPermutation */
-                $parent->variables()->set('content', (string) $resultRender);
-            }
-        ));
+        $decorateView = new DecorateViewModel($scriptViewModel);
+        $decorateView->onAfterViewModelRendered(function ($result, $parent) {
+            /** @var $parent iViewModelPermutation */
+            $parent->variables()->set('content', $result);
+        });
 
 
+        $layoutViewModel->bind($decorateView, null, 'view_page_content');
         return $layoutViewModel;
     }
 
@@ -476,17 +475,17 @@ class RenderDefaultStrategy
         $viewAsTemplate = clone $this->getLayoutViewModel();
         $viewAsTemplate->setTemplate( $this->getDefaultLayout() );
 
+
         ##  bind current result view model as child delegate
         ##- with parent when render while put result in $content
-        $viewAsTemplate->bind( new DecorateViewModel(
-            $viewModel
-            , function($resultRender, $parent) {
-                /** @var $parent iViewModelPermutation */
-                $parent->variables()->set('content', (string) $resultRender);
-            }
-        ));
+        /** @var DecorateViewModel $layoutViewModel */
+        $decorateView = new DecorateViewModel($viewModel);
+        $decorateView->onAfterViewModelRendered(function ($result, $parent) {
+            /** @var $parent iViewModelPermutation */
+            $parent->variables()->set('content', $result);
+        });
 
-
+        $viewAsTemplate->bind($decorateView, null, 'view_page_content');
         return $viewAsTemplate;
     }
 
