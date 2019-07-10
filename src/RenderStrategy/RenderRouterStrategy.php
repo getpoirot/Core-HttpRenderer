@@ -166,7 +166,8 @@ class RenderRouterStrategy
      */
     function shouldSkipRenderer()
     {
-        if (! $this->getMatchedRoute() )
+        $matchedRoute = $this->getMatchedRoute();
+        if (! $matchedRoute || ! $matchedRoute instanceof iRouterStack)
             return true;
 
         // check weather matched route is include param option
@@ -217,7 +218,7 @@ class RenderRouterStrategy
      *
      * @return $this
      */
-    function setMatchedRoute(iRouterStack $request)
+    function setMatchedRoute($request)
     {
         $this->matchedRoute = $request;
         return $this;

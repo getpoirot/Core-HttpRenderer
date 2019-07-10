@@ -510,7 +510,7 @@ class RenderDefaultStrategy
     {
         $viewScriptModel = $result;
 
-        if (! $route_match )
+        if (! $route_match || !$route_match instanceof iRouterStack)
             // Nothing to do with viewModel!
             return $viewScriptModel;
 
