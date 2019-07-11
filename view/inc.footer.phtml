@@ -1,19 +1,14 @@
-<footer id="footer" class="midnight-blue">
+<footer class="py-5 bg-dark">
     <div class="container">
-        <div class="row">
-            <div class="col-sm-6">
-                &copy; <?php echo date('Y') ?> <a target="_blank" href="https://github.com/phPoirot/" title="">Poirot Framework</a>. under MIT Licence.
-            </div>
-            <div class="col-sm-6">
-                <ul class="pull-right">
-                    <li><a href="<?php // echo \Module\HttpFoundation\Actions::url('main/home') ?>">Home</a></li>
-                    <li><a id="gototop" class="gototop" href="#"><i class="icon-chevron-up"></i></a></li><!--#gototop-->
-                </ul>
-            </div>
-        </div>
+        <p class="m-0 text-center text-white">
+            &copy; <?php echo date('Y') ?> <a target="_blank" href="https://github.com/phPoirot/" title="">Poirot Framework</a>. under MIT Licence.
+        </p>
     </div>
 </footer>
 
-<script src="<?php echo \Module\Foundation\Actions::path('www-theme') ?>/js/jquery.js"></script>
-<script src="<?php echo \Module\Foundation\Actions::path('www-theme') ?>/js/bootstrap.min.js"></script>
-<script src="<?php echo \Module\Foundation\Actions::path('www-theme') ?>/js/main.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.js"></script>
+
+<!-- Custom JavaScript for this theme -->
+<script src="<?php echo \Module\Foundation\Actions::path('www-theme') ?>/js/scrolling-nav.js"></script>

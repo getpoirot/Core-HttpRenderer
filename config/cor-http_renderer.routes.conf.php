@@ -12,7 +12,7 @@ return [
         ],
         'params' => [
             ListenerDispatch::ACTIONS => \Poirot\Ioc\newInitIns( new \Poirot\Ioc\instance(
-                '/module/httpfoundation/actions/FileServeAction'
+                \Module\HttpFoundation\Actions\FileServeAction::class
                 , [ 'baseDir' => __DIR__.'/../view/www' ]
             ) ),
         ],
